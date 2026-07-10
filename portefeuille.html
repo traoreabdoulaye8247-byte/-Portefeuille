@@ -308,6 +308,14 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
 .qa-tile .ico{font-size:1.4rem;line-height:1;}
 .qa-tile .lbl{font-size:.68rem;font-weight:600;margin-top:6px;color:var(--ink);}
 .qa-tile:active{background:var(--paper-dark);}
+
+.rub-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.rub-tile{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:11px 12px;display:flex;gap:10px;align-items:center;cursor:pointer;}
+.rub-tile .ico{font-size:1.25rem;line-height:1;}
+.rub-tile .lbl{font-size:.76rem;font-weight:700;color:var(--ink);}
+.rub-tile .stat{font-size:.66rem;color:var(--ink-soft);margin-top:2px;}
+.rub-tile:active{background:var(--paper-dark);}
+.rub-titre{font-size:.92rem;font-weight:700;margin:4px 2px 8px;color:var(--ink);}
 </style>
 </head>
 <body>
@@ -326,7 +334,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
   <div class="header-row">
     <div>
       <h1>Mon Portefeuille</h1>
-      <div class="sub" id="headerSub">FCFA · suivi complet · v18</div>
+      <div class="sub" id="headerSub">FCFA · suivi complet · v25</div>
     </div>
     <div style="display:flex;gap:8px;">
       <button class="lock-btn" onclick="openSauvegardeModal()" title="Sauvegarde">💾</button>
@@ -361,6 +369,8 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
       <div class="qa-tile" onclick="document.querySelector('nav.tabs button[data-tab=\'promotion\']').click()"><div class="ico">👥</div><div class="lbl">Promotion</div></div>
       <div class="qa-tile" onclick="openSauvegardeModal()"><div class="ico">💾</div><div class="lbl">Sauvegarde</div></div>
     </div>
+    <div class="rub-titre">📂 Toutes mes rubriques</div>
+    <div class="rub-grid" id="rubGrid"></div>
     <div class="card" id="dashMainCard">
       <div class="ledger-total">
         <div class="label">Solde total disponible</div>
@@ -396,6 +406,13 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
         <select id="promoTrimestreSel" onchange="renderPromotion()" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--white);color:var(--ink);font-size:.9rem;"></select>
       </div>
 
+      <div style="background:linear-gradient(135deg,#1F2A48,#2d3d68);border-radius:12px;padding:14px 12px;margin-bottom:12px;text-align:center;">
+        <div style="font-size:.68rem;letter-spacing:.5px;color:#c9d4ef;">💰 CAISSE GLOBALE DE LA PROMOTION</div>
+        <div style="font-size:1.45rem;font-weight:800;color:#fff;margin-top:3px;" id="promoCaisseTotal">0 FCFA</div>
+        <div style="font-size:.66rem;color:#aebbdd;margin-top:4px;" id="promoCaisseDetail"></div>
+        <div style="font-size:.66rem;color:#e8c9a0;margin-top:3px;" id="promoCaisseImpaye"></div>
+      </div>
+
       <div class="ledger-total" style="padding:14px 10px;">
         <div class="label">Collecté ce trimestre</div>
         <div class="amount" id="promoCollecte" style="color:var(--teal);">0 FCFA</div>
@@ -406,6 +423,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
       </div>
       <button class="btn btn-ochre btn-block" onclick="rappelTrimestrielCalendrier()">📅 Rappel trimestriel (calendrier)</button>
       <button class="btn btn-primary btn-block" style="margin-top:8px;" onclick="partagerPointWhatsapp()">📤 Envoyer le point WhatsApp</button>
+      <button class="btn btn-outline btn-block" style="margin-top:8px;" onclick="openBilanAnnee()">📊 Bilan par année (payés / en retard)</button>
     </div>
 
     <div class="card">
@@ -417,6 +435,11 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
         </div>
       </div>
       <input type="text" id="promoRecherche" placeholder="🔍 Rechercher un membre..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--white);color:var(--ink);font-size:.9rem;">
+      <select id="promoTri" onchange="renderPromotion()" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:var(--white);color:var(--ink);font-size:.85rem;">
+        <option value="alpha">↕️ Trier : ordre alphabétique (A → Z)</option>
+        <option value="retard">↕️ Trier : les plus en retard d'abord</option>
+        <option value="ajour">↕️ Trier : les plus à jour d'abord</option>
+      </select>
       <button class="btn btn-primary btn-block" onclick="openMembreForm()">+ Ajouter un membre</button>
     </div>
 
@@ -760,6 +783,42 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
   </div>
 </div>
 
+<!-- MODAL: Configuration bouton Rappel -->
+<div class="overlay" id="overlayRaccourci">
+  <div class="modal">
+    <button class="close-x" onclick="closeOverlay('overlayRaccourci')">✕</button>
+    <h3>🔔 Activer le bouton Rappel</h3>
+    <p style="font-size:.8rem;color:var(--ink-soft);margin-bottom:10px;">Une seule fois : crée un petit raccourci Apple qui donne à ton portefeuille le droit d'écrire dans tes Rappels. 2 minutes.</p>
+    <ol style="font-size:.79rem;padding-left:18px;line-height:1.7;margin-bottom:12px;">
+      <li>Ouvre l'app <b>Raccourcis</b> de l'iPhone</li>
+      <li>Appuie sur <b>+</b> en haut à droite</li>
+      <li>Appuie sur le nom en haut → renomme-le : <b>Rappel</b> (exactement)</li>
+      <li><b>Ajouter une action</b> → cherche « <b>Ajouter un nouveau rappel</b> »</li>
+      <li>Dans l'action, appuie sur le texte bleu du rappel → choisis la variable <b>« Entrée du raccourci »</b></li>
+      <li>Appuie sur la flèche <b>›</b> de l'action → active une <b>Alerte</b> → appuie longtemps sur la date → <b>« Demander à chaque fois »</b></li>
+      <li>Appuie sur <b>OK</b> — c'est fini !</li>
+    </ol>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeOverlay('overlayRaccourci')">Plus tard</button>
+      <button class="btn btn-primary" onclick="raccourciPret()">✓ C'est fait, activer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Bilan par année -->
+<div class="overlay" id="overlayBilanAnnee">
+  <div class="modal">
+    <button class="close-x" onclick="closeOverlay('overlayBilanAnnee')">✕</button>
+    <h3>Bilan par année</h3>
+    <div class="field">
+      <label>Choisir l'année</label>
+      <select id="bilanAnneeSel" onchange="renderBilanAnnee()"></select>
+    </div>
+    <div id="bilanContenu"></div>
+    <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="partagerBilanAnnee()">📤 Envoyer ce bilan sur WhatsApp</button>
+  </div>
+</div>
+
 <!-- MODAL: Situation d'un membre (affichage) -->
 <div class="overlay" id="overlaySituation">
   <div class="modal">
@@ -767,6 +826,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
     <h3 id="situTitle">Situation</h3>
     <div id="situContenu" style="font-family:'IBM Plex Mono',monospace;font-size:.82rem;white-space:pre-wrap;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:12px;line-height:1.5;"></div>
     <input type="hidden" id="situMembreId">
+    <button class="btn btn-ochre btn-block" style="margin-top:10px;" onclick="exportReleveMembre()">⬇ Relevé Excel de ce membre</button>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="copierSituation()">📋 Copier</button>
       <button class="btn btn-primary" onclick="envoyerSituationDepuisModale()">📱 Envoyer WhatsApp</button>
@@ -778,15 +838,11 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
 <div class="overlay" id="overlayAvance">
   <div class="modal">
     <button class="close-x" onclick="closeOverlay('overlayAvance')">✕</button>
-    <h3>Avance sur salaire à venir</h3>
-    <p style="font-size:.8rem;color:var(--ink-soft);margin-bottom:12px;">Tu prends de l'argent à l'avance sur ton salaire du mois prochain. Il sera à rembourser quand le salaire arrive.</p>
+    <h3>Avance sur salaire</h3>
+    <p style="font-size:.8rem;color:var(--ink-soft);margin-bottom:12px;">Suivi simple d'une avance prise sur ton salaire à venir. Ceci n'affecte pas tes comptes — c'est juste pour te souvenir de ce qui reste à rembourser.</p>
     <div class="field">
       <label>Montant de l'avance (FCFA)</label>
       <input type="number" id="avMontant" placeholder="0">
-    </div>
-    <div class="field">
-      <label>Compte qui reçoit l'avance</label>
-      <select id="avCompte"></select>
     </div>
     <div class="field">
       <label>Description</label>
@@ -812,10 +868,6 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
     <div class="field">
       <label>Montant remboursé (FCFA)</label>
       <input type="number" id="raMontant" placeholder="0">
-    </div>
-    <div class="field">
-      <label>Compte qui rembourse (l'argent en sort)</label>
-      <select id="raCompte"></select>
     </div>
     <div class="field">
       <label>Date</label>
@@ -952,7 +1004,8 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
     </div>
     <div class="field">
       <label>Description</label>
-      <input type="text" id="txDesc" placeholder="Ex: Achat glace, transport...">
+      <input type="text" id="txDesc" list="txDescListe" placeholder="Ex: Achat glace, transport..." autocomplete="off">
+      <datalist id="txDescListe"></datalist>
     </div>
     <div class="field">
       <label>Date</label>
@@ -1294,12 +1347,40 @@ function fillCategorieSelect(sel, includeEmpty){
     const o=document.createElement('option'); o.value=cat; o.textContent=cat; sel.appendChild(o);
   });
 }
+// Mémoire des anciennes saisies : descriptions déjà utilisées, avec leur catégorie et dernier montant
+let DESC_INFO = {};
+function chargerSuggestionsDesc(type){
+  DESC_INFO = {};
+  DATA.transactions.filter(t=>t.type===type && t.description && t.description.trim()).forEach(t=>{
+    const d = t.description.trim();
+    if(!DESC_INFO[d]) DESC_INFO[d] = {n:0, cats:{}, montant:t.montant, date:t.date||''};
+    const info = DESC_INFO[d];
+    info.n++;
+    info.cats[t.categorie] = (info.cats[t.categorie]||0)+1;
+    if((t.date||'') >= info.date){ info.montant = t.montant; info.date = t.date||''; }
+  });
+  const tri = Object.keys(DESC_INFO).sort((a,b)=>DESC_INFO[b].n-DESC_INFO[a].n).slice(0,40);
+  document.getElementById('txDescListe').innerHTML = tri.map(d=>`<option value="${d.replace(/"/g,'&quot;')}"></option>`).join('');
+}
+function appliquerMemoireDesc(){
+  const v = document.getElementById('txDesc').value.trim();
+  const info = DESC_INFO[v];
+  if(!info) return;
+  // catégorie la plus fréquente pour cette description
+  let best=null, bn=0;
+  Object.keys(info.cats).forEach(c=>{ if(info.cats[c]>bn){ bn=info.cats[c]; best=c; } });
+  const catSel = document.getElementById('txCategorie');
+  if(best && Array.from(catSel.options).some(o=>o.value===best)) catSel.value = best;
+  const mEl = document.getElementById('txMontant');
+  if(!mEl.value) mEl.value = info.montant;
+}
 function openTxForm(type, editId){
   document.getElementById('txType').value=type;
   document.getElementById('txEditId').value = editId||'';
   document.getElementById('txTitle').textContent = editId ? 'Modifier l\'opération' : (type==='depense' ? 'Nouvelle dépense' : "Nouvelle entrée d'argent");
   fillCompteSelect(document.getElementById('txCompte'), false);
   fillCategorieSelect(document.getElementById('txCategorie'), false);
+  chargerSuggestionsDesc(type);
   if(editId){
     const t = DATA.transactions.find(x=>x.id===editId);
     document.getElementById('txMontant').value = t.montant;
@@ -1394,7 +1475,9 @@ function deleteTx(id){
     return;
   }
   if(t.lien && t.lien.startsWith('avance:')){
-    alert("Cette opération vient d'une avance sur salaire. Gère-la depuis l'onglet Avances.");
+    if(!confirm('Cette ancienne opération venait d\'une avance (ancienne version). La supprimer ?')) return;
+    DATA.transactions = DATA.transactions.filter(x=>x.id!==id);
+    save();
     return;
   }
   if(!confirm('Supprimer cette opération ?')) return;
@@ -1657,7 +1740,7 @@ function compteNom(id){ const c=DATA.comptes.find(x=>x.id===id); return c?c.nom:
 function txItemHtml(t){
   const isPos = t.type==='entree' || t.type==='transfert_entrant';
   const sign = isPos ? '+' : '−';
-  const canEdit = (t.type==='depense' || t.type==='entree') && !(t.lien && (t.lien.startsWith('credit:')||t.lien.startsWith('fixe:')||t.lien.startsWith('avance:')));
+  const canEdit = (t.type==='depense' || t.type==='entree') && !(t.lien && (t.lien.startsWith('credit:')||t.lien.startsWith('fixe:')));
   return `<div class="tx-item">
     <div class="left">
       <div class="desc">${t.description}</div>
@@ -1767,6 +1850,8 @@ function renderDepenses(){
   document.getElementById(id).addEventListener('input', renderDepenses);
 });
 document.getElementById('promoRecherche').addEventListener('input', renderPromotion);
+document.getElementById('txDesc').addEventListener('change', appliquerMemoireDesc);
+document.getElementById('txDesc').addEventListener('input', appliquerMemoireDesc);
 
 function exportCSV(){
   let rows = [['Date','Type','Compte','Catégorie','Description','Montant']];
@@ -1790,6 +1875,41 @@ function exportCSV(){
   telechargerCSV(rows, 'portefeuille_export_'+todayStr()+'.csv');
 }
 
+function allerOnglet(tab){
+  const b = document.querySelector('nav.tabs button[data-tab="'+tab+'"]');
+  if(b) b.click();
+}
+function renderRubriques(){
+  const el = document.getElementById('rubGrid');
+  if(!el) return;
+  const mois = moisCourant();
+  const depMois = DATA.transactions.filter(t=>t.type==='depense' && t.date && t.date.indexOf(mois)===0).reduce((s,t)=>s+t.montant,0);
+  const depAuj = DATA.transactions.filter(t=>t.type==='depense' && t.date===todayStr()).reduce((s,t)=>s+t.montant,0);
+  const totComptes = DATA.comptes.reduce((s,c)=>s+soldeCompte(c.id),0);
+  const credRest = DATA.credits.reduce((s,c)=>s+creditRestant(c),0);
+  const avRest = DATA.avances.reduce((s,a)=>s+avanceRestant(a),0);
+  const onMeDoit = DATA.personnes.filter(p=>p.type==='on_me_doit').reduce((s,p)=>s+personneRestant(p),0);
+  const jeDois = DATA.personnes.filter(p=>p.type==='je_dois').reduce((s,p)=>s+personneRestant(p),0);
+  let retard = 0;
+  promo().membres.forEach(m=>{ if(situationMembre(m.id).reste>0) retard++; });
+  const caissePromo = promo().paiements.reduce((s,p)=>s+p.montant,0);
+  const agendaAVenir = DATA.agendaItems.filter(a=>!a.fait && (!a.date || a.date>=todayStr())).length;
+  const enfantsAuj = DATA.enfantsProgramme.filter(e=>e.date===todayStr()).length;
+  const tiles = [
+    ['promotion','🎓','Promotion', fmt(caissePromo)+' F · '+retard+' en retard'],
+    ['comptes','🏦','Comptes', fmt(totComptes)+' F'],
+    ['depenses','💸','Dépenses', fmt(depMois)+' F ce mois'],
+    ['quotidien','📆','Quotidien', fmt(depAuj)+' F aujourd\'hui'],
+    ['fixes','📌','Dépenses fixes', DATA.depensesFixes.length+' fixe(s)'],
+    ['credits','💳','Crédits', fmt(credRest)+' F restant'],
+    ['avances','📅','Avances salaire', fmt(avRest)+' F restant'],
+    ['personnes','🤝','Personnes', '+'+fmt(onMeDoit)+' / −'+fmt(jeDois)],
+    ['agenda','🗓','Agenda', agendaAVenir+' à venir'],
+    ['enfants','🧒','Enfants', enfantsAuj+' activité(s) auj.']
+  ];
+  el.innerHTML = tiles.map(t=>`<div class="rub-tile" onclick="allerOnglet('${t[0]}')"><div class="ico">${t[1]}</div><div><div class="lbl">${t[2]}</div><div class="stat">${t[3]}</div></div></div>`).join('');
+}
+
 function renderAll(){
   renderDashboard();
   renderComptes();
@@ -1799,6 +1919,7 @@ function renderAll(){
   renderDepenses();
   if(typeof renderFixes==='function') renderFixes();
   if(typeof renderAvances==='function') renderAvances();
+  if(typeof renderRubriques==='function') renderRubriques();
   if(typeof renderPromotion==='function') renderPromotion();
   if(typeof renderAgenda==='function') renderAgenda();
   if(typeof renderEnfants==='function') renderEnfants();
@@ -2129,10 +2250,11 @@ function renderFixes(){
         ? `<button class="btn btn-outline btn-sm" onclick="annulerFixePay('${f.id}','${occ.key}')">Annuler</button>`
         : `<button class="btn btn-ochre btn-sm" onclick="openFixePay('${f.id}','${occ.key}',${occ.jour},'${occ.label||''}')">✓ Payer</button>`;
       const calBtn = `<button class="btn btn-outline btn-sm" onclick="fixeOccCalendrier('${(f.nom||'').replace(/'/g,"\\'")}', ${occ.jour})" title="Ajouter au calendrier (rappel mensuel)">📅</button>`;
+      const rapBtn = `<button class="btn btn-outline btn-sm" onclick="rappelFixe('${f.id}', ${occ.jour})">🔔</button>`;
       const occName = occ.label ? occ.label+' (le '+occ.jour+')' : 'Échéance le '+occ.jour;
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px dotted var(--border);">
         <div style="font-size:.8rem;">${occName} <span class="badge-status ${s.badge}" style="margin-left:4px;">${s.label}</span></div>
-        <div style="display:flex;gap:6px;">${btn}${calBtn}</div>
+        <div style="display:flex;gap:6px;">${btn}${calBtn}${rapBtn}</div>
       </div>`;
     }).join('');
 
@@ -2543,6 +2665,7 @@ function renderAgenda(){
       <div class="actions">
         <button class="btn btn-outline btn-sm" onclick="toggleAgendaFait('${it.id}')">${it.fait?'↩ Rouvrir':'✓ Fait'}</button>
         ${calBtn}
+        <button class="btn btn-outline btn-sm" onclick="rappelAgendaItem('${it.id}')">🔔 Rappel</button>
         <button class="btn btn-outline btn-sm" onclick="openAgendaForm('${it.id}')">Modifier</button>
         <button class="btn btn-danger btn-sm" onclick="supprimerAgendaDirect('${it.id}')">🗑 Supprimer</button>
       </div>
@@ -2866,10 +2989,39 @@ function saveCotisation(){
   const date = document.getElementById('coDate').value || todayStr();
   if(!montant || montant<=0){ alert('Indique un montant valide.'); return; }
   let p = paiementMembre(membreId, trimestre);
+  const nouveau = !p;
   if(p){ p.montant=montant; p.date=date; }
   else { promo().paiements.push({id:uid(), membreId, trimestre, montant, date}); }
   closeOverlay('overlayCotisation');
   save();
+  if(nouveau){
+    const m = promo().membres.find(x=>x.id===membreId);
+    if(m && confirm('Paiement enregistré ✓\n\nEnvoyer un reçu WhatsApp à '+m.nom+' ?')){
+      envoyerRecu(membreId, trimestre);
+    }
+  }
+}
+function recuTexte(membreId, trimestre){
+  const m = promo().membres.find(x=>x.id===membreId);
+  const p = paiementMembre(membreId, trimestre);
+  if(!m || !p) return '';
+  const annee = parseInt(trimestre.slice(0,4),10);
+  const nPayes = trimestresPayesAnnee(membreId, annee);
+  return salutation()+' cher(e) '+prenomMembre(m.nom)+', 🙏\n\n'
+    + 'Je te confirme la bonne réception de ta cotisation :\n\n'
+    + '🧾 *Reçu de paiement — '+promo().nom+'*\n'
+    + '• Trimestre : '+trimestreLabel(trimestre)+'\n'
+    + '• Montant : '+fmt(p.montant)+' FCFA\n'
+    + '• Date : '+p.date+'\n'
+    + '• Situation '+annee+' : '+nPayes+'/4 trimestres payés\n\n'
+    + 'Merci beaucoup pour ta ponctualité et ton engagement au sein de la promotion. 🙏\n\nLe trésorier.';
+}
+function envoyerRecu(membreId, trimestre){
+  const m = promo().membres.find(x=>x.id===membreId);
+  if(!m) return;
+  const tel = telPourEnvoi(m);
+  if(!tel) return;
+  ouvrirWhatsapp(recuTexte(membreId, trimestre), tel);
 }
 function annulerCotisation(membreId, trimestre){
   if(!confirm('Annuler ce paiement ?')) return;
@@ -2934,6 +3086,91 @@ function rappelWhatsappMembre(membreId, trimestre){
     + 'Tu peux te mettre à jour dès que cela t\'arrange, il n\'y a aucune urgence. Je te remercie sincèrement pour ta compréhension et ton engagement.\n\n'
     + 'Passe une excellente journée. Bien à toi.';
   ouvrirWhatsapp(texte, tel);
+}
+// ---------- BILAN PAR ANNÉE ----------
+function openBilanAnnee(){
+  const sel = document.getElementById('bilanAnneeSel');
+  const annees = anneesExport();
+  sel.innerHTML = annees.map(y=>`<option value="${y}">${y}</option>`).join('');
+  const yNow = new Date().getFullYear();
+  sel.value = annees.includes(yNow) ? yNow : annees[annees.length-1];
+  renderBilanAnnee();
+  openOverlay('overlayBilanAnnee');
+}
+function trimestresPayesAnnee(membreId, annee){
+  let n = 0;
+  for(let t=1;t<=4;t++){ if(promo().paiements.some(p=>p.membreId===membreId && p.trimestre===annee+'-T'+t)) n++; }
+  return n;
+}
+function ligneBilanMembre(m, annee){
+  let coches='';
+  let paye=0;
+  for(let t=1;t<=4;t++){
+    const p = promo().paiements.find(pp=>pp.membreId===m.id && pp.trimestre===annee+'-T'+t);
+    coches += 'T'+t+(p?'✅':'❌')+'\u2002';
+    if(p) paye += p.montant;
+  }
+  const attendu = 4*(promo().montantTrimestre||0);
+  const reste = Math.max(0, attendu - paye);
+  return `<div style="padding:9px 0;border-bottom:1px solid var(--border);">
+    <div style="font-weight:600;font-size:.82rem;">${m.nom}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:3px;">
+      <div style="font-size:.8rem;">${coches.trim()}</div>
+      <div style="font-size:.72rem;white-space:nowrap;color:var(--ink-soft);">${reste>0 ? 'reste <b style="color:var(--rust);">'+fmt(reste)+' F</b>' : '<b style="color:var(--teal);">✓ '+fmt(paye)+' F</b>'}</div>
+    </div>
+  </div>`;
+}
+function renderBilanAnnee(){
+  const annee = parseInt(document.getElementById('bilanAnneeSel').value,10);
+  const membres = [...promo().membres].sort((a,b)=>a.nom.localeCompare(b.nom));
+  const aJour = [], enRetard = [];
+  membres.forEach(m=>{
+    const n = trimestresPayesAnnee(m.id, annee);
+    if(n===4) aJour.push(m);
+    else enRetard.push(m);
+  });
+  const collecte = promo().paiements.filter(p=>p.trimestre.indexOf(annee+'-')===0).reduce((s,p)=>s+p.montant,0);
+  let html = `<div class="stat-row" style="margin-bottom:12px;">
+    <div class="stat owed"><div class="label">À jour ${annee}</div><div class="val">${aJour.length}</div></div>
+    <div class="stat owe"><div class="label">En retard</div><div class="val">${enRetard.length}</div></div>
+  </div>
+  <div style="text-align:center;font-size:.85rem;margin-bottom:12px;">Collecté ${annee} : <b>${fmt(collecte)} F</b></div>`;
+  html += `<div style="font-size:.85rem;font-weight:700;color:var(--rust);margin:10px 0 4px;">⏳ En retard (${enRetard.length})</div>`;
+  html += enRetard.length ? enRetard.map(m=>ligneBilanMembre(m, annee)).join('') : '<div class="empty">Personne en retard 🎉</div>';
+  html += `<div style="font-size:.85rem;font-weight:700;color:var(--teal);margin:16px 0 4px;">✅ À jour (${aJour.length})</div>`;
+  html += aJour.length ? aJour.map(m=>ligneBilanMembre(m, annee)).join('') : '<div class="empty">Personne à jour pour l\'instant.</div>';
+  document.getElementById('bilanContenu').innerHTML = html;
+}
+function texteBilanAnnee(annee){
+  const membres = [...promo().membres].sort((a,b)=>a.nom.localeCompare(b.nom));
+  const M = promo().montantTrimestre||0;
+  const aJour = [], enRetard = [];
+  membres.forEach(m=>{
+    let coches='', paye=0;
+    for(let t=1;t<=4;t++){
+      const p = promo().paiements.find(pp=>pp.membreId===m.id && pp.trimestre===annee+'-T'+t);
+      coches += 'T'+t+(p?'✅':'❌')+' ';
+      if(p) paye += p.montant;
+    }
+    const reste = Math.max(0, 4*M - paye);
+    if(reste===0) aJour.push(m.nom);
+    else enRetard.push('• '+m.nom+' : '+coches.trim()+' — reste '+fmt(reste)+' F');
+  });
+  const collecte = promo().paiements.filter(p=>p.trimestre.indexOf(annee+'-')===0).reduce((s,p)=>s+p.montant,0);
+  let txt = salutation()+' chers membres de la '+promo().nom+'. 🙏\n\n';
+  txt += 'Voici le bilan détaillé des cotisations de l\'année *'+annee+'* :\n\n';
+  txt += '💰 Total collecté : '+fmt(collecte)+' FCFA\n';
+  txt += '✅ À jour : '+aJour.length+' / '+membres.length+' membres\n\n';
+  txt += '⏳ *Situation détaillée des retards ('+enRetard.length+') :*\n';
+  txt += (enRetard.length ? enRetard.join('\n') : '— Personne, bravo à tous ! 🎉');
+  txt += '\n\n✅ *À jour ('+aJour.length+') :*\n';
+  txt += (aJour.length ? aJour.map(n=>'• '+n).join('\n') : '—');
+  txt += '\n\nMerci à celles et ceux qui sont à jour. Pour les autres, n\'hésitez pas à régulariser à votre rythme. Merci à toutes et à tous. 🙏';
+  return txt;
+}
+function partagerBilanAnnee(){
+  const annee = parseInt(document.getElementById('bilanAnneeSel').value,10);
+  ouvrirWhatsapp(texteBilanAnnee(annee), '');
 }
 function partagerPointWhatsapp(){
   const trimestre = document.getElementById('promoTrimestreSel').value || trimestreActuel();
@@ -3172,8 +3409,16 @@ function groupesEchus(){
   trimestresDus().forEach(function(t){ const y=t.slice(0,4); (g[y]=g[y]||[]).push(parseInt(t.split('-T')[1],10)); });
   return Object.keys(g).sort().map(function(y){ return [parseInt(y,10), g[y]]; });
 }
+// Années pour les EXPORTS : jusqu'à l'année en cours (ou plus si des paiements existent), jamais d'année future vide
+function anneesExport(){
+  const debut = promo().anneeDebut||2024;
+  let fin = new Date().getFullYear();
+  promo().paiements.forEach(p=>{ const y=parseInt(p.trimestre.slice(0,4),10); if(y>fin) fin=y; });
+  const res=[]; for(let y=debut;y<=fin;y++) res.push(y);
+  return res;
+}
 function groupesTous(){
-  return anneesPromo().map(function(y){ return [y,[1,2,3,4]]; });
+  return anneesExport().map(function(y){ return [y,[1,2,3,4]]; });
 }
 function grilleCotisations(mode){
   const groupes = mode==='impayes' ? groupesEchus() : groupesTous();
@@ -3243,7 +3488,7 @@ function grilleCotisations(mode){
   return {grille:grille, largeurs:largeurs};
 }
 function grilleComplet(){
-  const annees = anneesPromo();
+  const annees = anneesExport();
   const trims = []; annees.forEach(function(y){ for(let t=1;t<=4;t++) trims.push([y,t]); });
   const header = [{v:'Nom', s:3}];
   trims.forEach(function(yt){ header.push({v:yt[0]+' T'+yt[1], s:3}); });
@@ -3278,6 +3523,49 @@ function grilleComplet(){
   const largeurs = [34]; for(let c=2; c<=colTot; c++) largeurs.push(11);
   return {grille:grille, largeurs:largeurs};
 }
+// ---------- RELEVÉ INDIVIDUEL D'UN MEMBRE ----------
+function grilleReleve(membreId){
+  const m = promo().membres.find(x=>x.id===membreId);
+  const M = promo().montantTrimestre||0;
+  const annees = anneesExport();
+  const grille = [];
+  grille.push([{v:'Relevé individuel — '+m.nom, s:1}]);
+  grille.push([{v:promo().nom+' — cotisation '+fmt(M)+' F / trimestre — au '+todayStr(), s:2}]);
+  grille.push([{v:'Année',s:3},{v:'T1',s:3},{v:'T2',s:3},{v:'T3',s:3},{v:'T4',s:3},{v:'Payé',s:3},{v:'Reste',s:3}]);
+  let totPaye=0, totReste=0;
+  annees.forEach(function(y){
+    const ligne = [{v:String(y), s:4}];
+    let paye=0;
+    for(let t=1;t<=4;t++){
+      const p = promo().paiements.find(function(pp){ return pp.membreId===membreId && pp.trimestre===y+'-T'+t; });
+      if(p){ ligne.push({v:p.montant, t:'n', s:5}); paye+=p.montant; }
+      else ligne.push({v:'', s:5});
+    }
+    const r = grille.length+1;
+    const reste = Math.max(0, 4*M - paye);
+    ligne.push({v:paye, t:'n', s:5, f:'SUM(B'+r+':E'+r+')'});
+    ligne.push({v:reste, t:'n', s:5});
+    totPaye += paye; totReste += reste;
+    grille.push(ligne);
+  });
+  const rN = grille.length;
+  grille.push([{v:'TOTAL (F)', s:9},{v:'',s:9},{v:'',s:9},{v:'',s:9},{v:'',s:9},{v:totPaye,t:'n',s:8,f:'SUM(F4:F'+rN+')'},{v:totReste,t:'n',s:8,f:'SUM(G4:G'+rN+')'}]);
+  grille.push([{v:''}]);
+  grille.push([{v:'Détail des paiements enregistrés', s:1}]);
+  grille.push([{v:'Trimestre',s:3},{v:'Montant',s:3},{v:'Date',s:3}]);
+  const ps = promo().paiements.filter(function(p){ return p.membreId===membreId; }).sort(function(a,b){ return a.trimestre.localeCompare(b.trimestre); });
+  ps.forEach(function(p){ grille.push([{v:trimestreLabel(p.trimestre), s:4},{v:p.montant, t:'n', s:5},{v:p.date||'', s:5}]); });
+  if(ps.length===0) grille.push([{v:'Aucun paiement enregistré pour le moment.', s:4}]);
+  return {grille:grille, largeurs:[20,11,11,11,11,12,12]};
+}
+function exportReleveMembre(){
+  const membreId = document.getElementById('situMembreId').value;
+  const m = promo().membres.find(x=>x.id===membreId);
+  if(!m) return;
+  const g = grilleReleve(membreId);
+  const nomFic = 'releve_' + m.nom.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') + '_' + todayStr() + '.xlsx';
+  genererXlsx([{nom:'Relevé', grille:g.grille, largeurs:g.largeurs}], nomFic);
+}
 function exportImpayesXlsx(){
   const g = grilleCotisations('impayes');
   genererXlsx([{nom:'Impayés', grille:g.grille, largeurs:g.largeurs}], 'impayes_promotion_'+todayStr()+'.xlsx');
@@ -3305,7 +3593,7 @@ function anneesPromo(){
 // Export : situation des impayés (trimestres échus seulement)
 function exportImpayesCSV(){
   const dus = trimestresDus();
-  const annees = anneesPromo();
+  const annees = anneesExport();
   const montant = promo().montantTrimestre||0;
   const entete = ['Nom'];
   annees.forEach(y=>{
@@ -3341,7 +3629,7 @@ function exportImpayesCSV(){
 }
 // Export : cotisations payées (avec paiements d'avance)
 function exportPayesCSV(){
-  const annees = anneesPromo();
+  const annees = anneesExport();
   const entete=['Nom'];
   annees.forEach(y=>{ for(let t=1;t<=4;t++) entete.push(y+' T'+t); entete.push('Payé '+y); });
   entete.push('TOTAL PAYÉ');
@@ -3410,6 +3698,16 @@ function renderPromotion(){
   document.getElementById('promoNbPaye').textContent = nbPaye+' / '+membres.length;
   document.getElementById('promoNbReste').textContent = (membres.length-nbPaye);
 
+  // Caisse globale : tout ce qui a été collecté depuis le début, toutes années confondues
+  const totalGlobal = promo().paiements.reduce((s,p)=>s+p.montant,0);
+  const parAnnee = {};
+  promo().paiements.forEach(p=>{ const y=p.trimestre.slice(0,4); parAnnee[y]=(parAnnee[y]||0)+p.montant; });
+  document.getElementById('promoCaisseTotal').textContent = fmt(totalGlobal)+' FCFA';
+  document.getElementById('promoCaisseDetail').textContent = Object.keys(parAnnee).sort().map(y=>y+' : '+fmt(parAnnee[y])+' F').join('  ·  ');
+  let impayeGlobal = 0;
+  membres.forEach(m=>{ impayeGlobal += situationMembre(m.id).reste; });
+  document.getElementById('promoCaisseImpaye').textContent = 'Reste à recouvrer : '+fmt(impayeGlobal)+' F';
+
   const list = document.getElementById('promoMembresList');
   const empty = document.getElementById('promoEmpty');
   if(membres.length===0){ list.innerHTML=''; empty.style.display='block'; return; }
@@ -3418,6 +3716,15 @@ function renderPromotion(){
   const q = (document.getElementById('promoRecherche').value||'').toLowerCase().trim();
   let sorted = [...membres].sort((a,b)=>a.nom.localeCompare(b.nom));
   if(q) sorted = sorted.filter(m=> m.nom.toLowerCase().includes(q) || (m.tel||'').replace(/[^0-9]/g,'').includes(q.replace(/[^0-9]/g,'')||'###'));
+  const tri = document.getElementById('promoTri') ? document.getElementById('promoTri').value : 'alpha';
+  if(tri!=='alpha'){
+    const resteDe = {};
+    sorted.forEach(function(m){ resteDe[m.id] = situationMembre(m.id).reste; });
+    sorted.sort(function(a,b){
+      const d = (tri==='retard') ? (resteDe[b.id]-resteDe[a.id]) : (resteDe[a.id]-resteDe[b.id]);
+      return d!==0 ? d : a.nom.localeCompare(b.nom);
+    });
+  }
   if(sorted.length===0){ list.innerHTML = '<div class="empty">Aucun membre trouvé pour « '+q+' ».</div>'; return; }
   list.innerHTML = sorted.map(m=>{
     const p = paiementMembre(m.id, trimestre);
@@ -3435,6 +3742,7 @@ function renderPromotion(){
     const telBtn = m.tel ? '' : `<button class="btn btn-ochre btn-sm" onclick="openMembreForm('${m.id}', true)">☎️ Ajouter n°</button>`;
     const btn = paye
       ? `<button class="btn btn-outline btn-sm" onclick="openCotisation('${m.id}','${trimestre}')">Modifier</button>
+         <button class="btn btn-outline btn-sm" onclick="envoyerRecu('${m.id}','${trimestre}')">🧾 Reçu</button>
          <button class="btn btn-outline btn-sm" onclick="annulerCotisation('${m.id}','${trimestre}')">Annuler</button>`
       : `<button class="btn btn-ochre btn-sm" onclick="openCotisation('${m.id}','${trimestre}')">✓ Marquer payé</button>
          <button class="btn btn-outline btn-sm" onclick="rappelWhatsappMembre('${m.id}','${trimestre}')">📱 Rappeler</button>`;
@@ -3464,7 +3772,6 @@ function avanceRestant(av){
   return av.montant - rembourse;
 }
 function openAvanceForm(){
-  fillCompteSelect(document.getElementById('avCompte'), false);
   document.getElementById('avMontant').value='';
   document.getElementById('avDesc').value='';
   document.getElementById('avDate').value=todayStr();
@@ -3472,14 +3779,11 @@ function openAvanceForm(){
 }
 function saveAvance(){
   const montant = parseFloat(document.getElementById('avMontant').value);
-  const compteId = document.getElementById('avCompte').value;
   const description = document.getElementById('avDesc').value.trim() || 'Avance sur salaire';
   const date = document.getElementById('avDate').value || todayStr();
   if(!montant || montant<=0){ alert('Indique un montant valide.'); return; }
-  const av = {id:uid(), montant, compteId, description, date, historique:[]};
-  DATA.avances.push(av);
-  // l'avance entre sur le compte choisi
-  DATA.transactions.push({id:uid(), compteId, type:'entree', montant, categorie:'Avance sur salaire', description, date, lien:'avance:'+av.id});
+  // avance = simple suivi, n'affecte AUCUN compte
+  DATA.avances.push({id:uid(), montant, description, date, historique:[]});
   closeOverlay('overlayAvance');
   save();
 }
@@ -3487,7 +3791,6 @@ function openRembAvance(avanceId){
   const av = DATA.avances.find(a=>a.id===avanceId);
   document.getElementById('raAvanceId').value=avanceId;
   document.getElementById('raTitle').textContent='Rembourser : '+av.description;
-  fillCompteSelect(document.getElementById('raCompte'), false);
   document.getElementById('raMontant').value= avanceRestant(av);
   document.getElementById('raDate').value=todayStr();
   openOverlay('overlayRembAvance');
@@ -3495,25 +3798,19 @@ function openRembAvance(avanceId){
 function saveRembAvance(){
   const avanceId = document.getElementById('raAvanceId').value;
   const montant = parseFloat(document.getElementById('raMontant').value);
-  const compteId = document.getElementById('raCompte').value;
   const date = document.getElementById('raDate').value || todayStr();
   const av = DATA.avances.find(a=>a.id===avanceId);
   if(!montant || montant<=0){ alert('Indique un montant valide.'); return; }
-  if(montant > soldeCompte(compteId)){
-    alert('Solde insuffisant sur ce compte.\nDisponible : '+fmt(soldeCompte(compteId))+' FCFA.'); return;
-  }
   const restant = avanceRestant(av);
   if(montant > restant + 0.01){ if(!confirm('Le montant dépasse le reste à rembourser ('+fmt(restant)+' F). Continuer ?')) return; }
-  const txId = uid();
-  av.historique.push({id:uid(), montant, date, compteId, txId});
-  DATA.transactions.push({id:txId, compteId, type:'depense', montant, categorie:'Remboursement avance', description:'Remb. avance — '+av.description, date, lien:'avance:'+av.id});
+  // remboursement = simple suivi, n'affecte AUCUN compte
+  av.historique.push({id:uid(), montant, date});
   closeOverlay('overlayRembAvance');
   save();
 }
 function deleteAvance(id){
-  if(!confirm('Supprimer cette avance et ses opérations liées ?')) return;
+  if(!confirm('Supprimer cette avance ?')) return;
   DATA.avances = DATA.avances.filter(a=>a.id!==id);
-  DATA.transactions = DATA.transactions.filter(t=>t.lien!=='avance:'+id);
   save();
 }
 function renderAvances(){
@@ -3526,11 +3823,11 @@ function renderAvances(){
   list.innerHTML = DATA.avances.map(a=>{
     const restant = avanceRestant(a);
     const pct = a.montant>0 ? Math.min(100, Math.round((a.montant-restant)/a.montant*100)) : 0;
-    const hist = a.historique.slice().reverse().map(h=>`<div class="hist-line"><span>${h.date} · ${compteNom(h.compteId)}</span><span>${fmt(h.montant)} F</span></div>`).join('');
+    const hist = a.historique.slice().reverse().map(h=>`<div class="hist-line"><span>${h.date}</span><span>${fmt(h.montant)} F</span></div>`).join('');
     return `<div class="credit-card">
       <div class="top">
         <div>
-          <div class="compte-label">Reçue sur ${compteNom(a.compteId)}</div>
+          <div class="compte-label">Avance à rembourser</div>
           <div style="font-size:.85rem;margin-top:2px;">${a.description} · ${a.date}</div>
         </div>
         <button class="btn btn-danger btn-sm" onclick="deleteAvance('${a.id}')">✕</button>
@@ -3541,6 +3838,44 @@ function renderAvances(){
       ${restant>0 ? `<div class="actions"><button class="btn btn-ochre btn-sm" onclick="openRembAvance('${a.id}')">+ Rembourser</button></div>` : `<div class="hist" style="color:var(--teal);font-weight:600;">✓ Entièrement remboursée</div>`}
     </div>`;
   }).join('');
+}
+
+// ---------- BOUTON RAPPEL (via Raccourcis Apple) ----------
+let RAPPEL_EN_ATTENTE = '';
+function boutonRappel(titre){
+  if(!DATA.raccourciOk){
+    RAPPEL_EN_ATTENTE = titre;
+    openOverlay('overlayRaccourci');
+    return;
+  }
+  lancerRaccourciRappel(titre);
+}
+function raccourciPret(){
+  DATA.raccourciOk = true;
+  save();
+  closeOverlay('overlayRaccourci');
+  if(RAPPEL_EN_ATTENTE){ lancerRaccourciRappel(RAPPEL_EN_ATTENTE); RAPPEL_EN_ATTENTE=''; }
+}
+function lancerRaccourciRappel(titre){
+  const url = 'shortcuts://run-shortcut?name=Rappel&input=text&text=' + encodeURIComponent(titre);
+  window.__dernierRappelUrl = url;
+  const a = document.createElement('a');
+  a.href = url;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+function rappelAgendaItem(id){
+  const it = DATA.agendaItems.find(x=>x.id===id);
+  if(!it) return;
+  let t = it.titre || 'Rappel';
+  if(it.date){ t += ' — '+it.date + (it.heure ? ' '+it.heure : ''); }
+  boutonRappel(t);
+}
+function rappelFixe(id, jour){
+  const f = DATA.depensesFixes.find(x=>x.id===id);
+  if(!f) return;
+  boutonRappel('Payer : '+f.nom+' ('+fmt(f.montant)+' F) — le '+jour+' du mois');
 }
 
 checkLock();

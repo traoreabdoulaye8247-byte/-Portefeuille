@@ -335,7 +335,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
   <div class="header-row">
     <div>
       <h1>Mon Portefeuille</h1>
-      <div class="sub" id="headerSub">FCFA · suivi complet · v33</div>
+      <div class="sub" id="headerSub">FCFA · suivi complet · v35</div>
     </div>
     <div style="display:flex;gap:8px;">
       <button class="lock-btn" onclick="openSauvegardeModal()" title="Sauvegarde">💾</button>
@@ -974,7 +974,9 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
     <button class="close-x" onclick="closeOverlay('overlaySituation')">✕</button>
     <h3 id="situTitle">Situation</h3>
     <div id="situContenu" style="font-family:'IBM Plex Mono',monospace;font-size:.82rem;white-space:pre-wrap;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:12px;line-height:1.5;"></div>
+    <div id="situMultiBloc"></div>
     <input type="hidden" id="situMembreId">
+    <div id="situMultiBloc" style="margin-top:10px;"></div>
     <button class="btn btn-ochre btn-block" style="margin-top:10px;" onclick="exportReleveMembre()">⬇ Relevé Excel de ce membre</button>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="copierSituation()">📋 Copier</button>
@@ -1369,9 +1371,10 @@ const PROMO_SEED = {"nom": "Promotion HFC", "montantTrimestre": 10000, "anneeDeb
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function todayStr(){return new Date().toISOString().slice(0,10);}
+const FMT_FR = (typeof Intl!=='undefined' && Intl.NumberFormat) ? new Intl.NumberFormat('fr-FR') : null;
 function fmt(n){
   n = Math.round(n||0);
-  return n.toLocaleString('fr-FR');
+  return FMT_FR ? FMT_FR.format(n) : n.toLocaleString('fr-FR');
 }
 
 function loadData(){
@@ -2067,8 +2070,7 @@ function renderRubriques(){
   const avRest = DATA.avances.reduce((s,a)=>s+avanceRestant(a),0);
   const onMeDoit = DATA.personnes.filter(p=>p.type==='on_me_doit').reduce((s,p)=>s+personneRestant(p),0);
   const jeDois = DATA.personnes.filter(p=>p.type==='je_dois').reduce((s,p)=>s+personneRestant(p),0);
-  let retard = 0;
-  promo().membres.forEach(m=>{ if(situationMembre(m.id).reste>0) retard++; });
+  const retard = cachePromo().statsGlobales.enRetard;
   const caissePromo = promo().paiements.reduce((s,p)=>s+p.montant,0) - (promo().aides||[]).reduce((s,a)=>s+a.montant,0);
   const agendaAVenir = DATA.agendaItems.filter(a=>!a.fait && (!a.date || a.date>=todayStr())).length;
   const enfantsAuj = DATA.enfantsProgramme.filter(e=>e.date===todayStr()).length;
@@ -3074,6 +3076,7 @@ function trimestreLabel(key){
 }
 // ---------- CACHE DE PERFORMANCE (recalculé après chaque modification) ----------
 let PROMO_CACHE = null;
+let PROMO_REV = 0;
 const FIN_TRIMESTRE = {1:'-03-31', 2:'-06-30', 3:'-09-30', 4:'-12-31'};
 function finTrimestreKey(key){ // '2026-T1' -> '2026-03-31'
   return key.slice(0,4) + FIN_TRIMESTRE[parseInt(key.slice(6),10)];
@@ -3098,7 +3101,11 @@ function cachePromo(){
   });
   const membresParId = {};
   promo().membres.forEach(function(m){ membresParId[m.id] = m; });
-  PROMO_CACHE = {parMembre: parMembre, dus: trimestresDus(), situ: {}, membresParId: membresParId};
+  PROMO_CACHE = {parMembre: parMembre, dus: trimestresDus(), situ: {}, membresParId: membresParId, rev: ++PROMO_REV};
+  // Statistiques globales calculées UNE seule fois par génération de cache (partagées dashboard + promotion)
+  let impayeG = 0, enRetardG = 0;
+  promo().membres.forEach(function(m){ const r = situationMembre(m.id).reste; if(r>0){ impayeG += r; enRetardG++; } });
+  PROMO_CACHE.statsGlobales = {impaye: impayeG, enRetard: enRetardG};
   return PROMO_CACHE;
 }
 function paiementMembre(membreId, trimestre){
@@ -3242,7 +3249,7 @@ function saveCotisation(){
   if(p){ p.montant=montant; p.date=date; }
   else { promo().paiements.push({id:uid(), membreId, trimestre, montant, date}); }
   closeOverlay('overlayCotisation');
-  save();
+  savePromoCible(membreId, trimestre);
   if(nouveau){
     const m = promo().membres.find(x=>x.id===membreId);
     if(m && confirm('Paiement enregistré ✓\n\nEnvoyer un reçu WhatsApp à '+m.nom+' ?')){
@@ -3278,7 +3285,7 @@ function annulerCotisation(membreId, trimestre){
   const ps = promo().paiements.filter(p=>p.membreId===membreId && p.trimestre===trimestre);
   if(ps.length) mettreALaCorbeille('cotisation', 'Cotisation — '+(m?m.nom:'?')+' — '+trimestreLabel(trimestre), {paiements:ps});
   promo().paiements = promo().paiements.filter(p=>!(p.membreId===membreId && p.trimestre===trimestre));
-  save();
+  savePromoCible(membreId, trimestre);
 }
 
 // ---------- WHATSAPP ----------
@@ -3508,7 +3515,93 @@ function envoyerSituationMembre(membreId){
   document.getElementById('situTitle').textContent = 'Situation — '+m.nom;
   document.getElementById('situContenu').textContent = situationMembreTexte(membreId);
   document.getElementById('situMembreId').value = membreId;
+  renderSituMulti(membreId);
   openOverlay('overlaySituation');
+}
+function renderSituMulti(membreId){
+  const bloc = document.getElementById('situMultiBloc');
+  if(!bloc) return;
+  const s = situationMembre(membreId);
+  const M = promo().montantTrimestre||0;
+  if(!s.manquants.length){
+    bloc.innerHTML = '<div style="text-align:center;font-size:.82rem;color:var(--teal);font-weight:700;margin-top:10px;">🎉 Aucun trimestre en retard.</div>';
+    return;
+  }
+  let html = '<div style="margin-top:12px;border-top:1px dashed var(--border);padding-top:10px;">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">'
+    + '<b style="font-size:.85rem;">💰 Encaisser plusieurs trimestres</b>'
+    + '<button class="btn btn-outline btn-sm" onclick="toutCocherSituMulti()">Tout cocher</button></div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;">';
+  s.manquants.forEach(function(tr){
+    html += '<label style="flex:1 1 45%;display:flex;align-items:center;gap:6px;font-size:.8rem;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:8px;">'
+      + '<input type="checkbox" class="situMultiCk" value="'+tr+'" onchange="majTotalSituMulti()"> '+tr
+      + '<span style="color:var(--ink-soft);margin-left:auto;">'+fmt(M)+' F</span></label>';
+  });
+  html += '</div>'
+    + '<label style="font-size:.75rem;color:var(--ink-soft);">Date du paiement</label>'
+    + '<input type="date" id="situMultiDate" value="'+todayStr()+'" style="margin-bottom:8px;">'
+    + '<button class="btn btn-primary btn-block" onclick="payerTrimestresCoches()">✓ Encaisser la sélection — <span id="situMultiTotal">0</span> F</button>'
+    + '</div>';
+  bloc.innerHTML = html;
+  majTotalSituMulti();
+}
+function majTotalSituMulti(){
+  const M = promo().montantTrimestre||0;
+  const n = document.querySelectorAll('.situMultiCk:checked').length;
+  const el = document.getElementById('situMultiTotal');
+  if(el) el.textContent = fmt(n*M);
+}
+function toutCocherSituMulti(){
+  const cks = Array.prototype.slice.call(document.querySelectorAll('.situMultiCk'));
+  const tous = cks.length && cks.every(function(c){ return c.checked; });
+  cks.forEach(function(c){ c.checked = !tous; });
+  majTotalSituMulti();
+}
+function recuMultiTexte(membreId, trimestres, date){
+  const m = promo().membres.find(x=>x.id===membreId);
+  if(!m) return '';
+  const M = promo().montantTrimestre||0;
+  const s = situationMembre(membreId);
+  let txt = salutation()+' cher(e) '+prenomMembre(m.nom)+', 🙏\n\n'
+    + 'Je te confirme la bonne réception de ta cotisation :\n\n'
+    + '🧾 *Reçu de paiement — '+promo().nom+'*\n';
+  trimestres.forEach(function(tr){ txt += '• '+trimestreLabel(tr)+' — '+fmt(M)+' F\n'; });
+  txt += '💰 *Total reçu : '+fmt(trimestres.length*M)+' FCFA*\n'
+    + '📅 Date : '+date+'\n\n';
+  txt += (s.reste>0
+    ? '⏳ Après ce paiement, il reste : '+fmt(s.reste)+' F ('+s.manquants.length+' trimestre'+(s.manquants.length>1?'s':'')+')'
+    : '✅ Tu es maintenant totalement à jour, félicitations !');
+  txt += '\n\nMerci beaucoup pour ta ponctualité et ton engagement au sein de la promotion. 🙏\n\nLe trésorier.';
+  return txt;
+}
+function payerTrimestresCoches(){
+  const membreId = document.getElementById('situMembreId').value;
+  const m = promo().membres.find(x=>x.id===membreId);
+  if(!m) return;
+  const cks = Array.prototype.slice.call(document.querySelectorAll('.situMultiCk:checked')).map(function(c){ return c.value; });
+  if(!cks.length){ alert('Coche au moins un trimestre à encaisser.'); return; }
+  const M = promo().montantTrimestre||0;
+  const date = document.getElementById('situMultiDate').value || todayStr();
+  if(!confirm('Encaisser '+cks.length+' trimestre(s) pour '+m.nom+'\nTotal : '+fmt(cks.length*M)+' F ?')) return;
+  const ajoutes = [];
+  cks.forEach(function(tr){
+    if(!paiementMembre(membreId, tr)){
+      promo().paiements.push({id:uid(), membreId:membreId, trimestre:tr, montant:M, date:date});
+      ajoutes.push(tr);
+    }
+  });
+  if(!ajoutes.length){ alert('Ces trimestres sont déjà payés.'); return; }
+  save();
+  document.getElementById('situContenu').textContent = situationMembreTexte(membreId);
+  renderSituMulti(membreId);
+  const tel = telPourEnvoi(m);
+  if(tel){
+    if(confirm('✓ '+ajoutes.length+' trimestre(s) encaissé(s) — '+fmt(ajoutes.length*M)+' F.\n\nEnvoyer un reçu WhatsApp groupé à '+prenomMembre(m.nom)+' ?')){
+      ouvrirWhatsapp(recuMultiTexte(membreId, ajoutes, date), tel);
+    }
+  } else {
+    alert('✓ '+ajoutes.length+' trimestre(s) encaissé(s) — '+fmt(ajoutes.length*M)+' F.');
+  }
 }
 function copierSituation(){
   const txt = document.getElementById('situContenu').textContent;
@@ -3943,19 +4036,10 @@ function exportPromotionCSV(){
   telechargerCSV(rows, 'cotisations_promotion_'+todayStr()+'.csv');
 }
 
-function renderPromotion(){
+let PROMO_LISTE_MEMO = {cle:'', html:''};
+function renderPromoStats(trimestre){
   document.getElementById('promoNom').textContent = promo().nom;
   document.getElementById('promoSousTitre').textContent = 'Trimestriel · '+promo().membres.length+' membre(s)'+(promo().montantTrimestre?(' · '+fmt(promo().montantTrimestre)+' F/trim.'):'');
-
-  // remplir le sélecteur de trimestres
-  const sel = document.getElementById('promoTrimestreSel');
-  const trimestres = listeTrimestres();
-  const ancienneVal = sel.value;
-  sel.innerHTML = trimestres.map(t=>`<option value="${t}">${trimestreLabel(t)}${t===trimestreActuel()?' (en cours)':(t>trimestreActuel()?' (à venir)':'')}</option>`).join('');
-  if(ancienneVal && trimestres.includes(ancienneVal)) sel.value = ancienneVal;
-  else sel.value = trimestreActuel();
-  const trimestre = sel.value;
-
   const membres = promo().membres;
   const concernesTrim = membres.filter(m=>trimestreDuPourMembre(m, trimestre));
   const nbPaye = concernesTrim.filter(m=>paiementMembre(m.id, trimestre)).length;
@@ -3963,39 +4047,16 @@ function renderPromotion(){
   document.getElementById('promoCollecte').textContent = fmt(collecte)+' FCFA';
   document.getElementById('promoNbPaye').textContent = nbPaye+' / '+concernesTrim.length;
   document.getElementById('promoNbReste').textContent = (concernesTrim.length-nbPaye);
-
-  // Caisse globale : collecté depuis le début MOINS les aides versées (décès, retraite, accident...)
   const totalGlobal = promo().paiements.reduce((s,p)=>s+p.montant,0);
   const totalAidesV = (promo().aides||[]).reduce((s,a)=>s+a.montant,0);
-  const soldeCaisse = totalGlobal - totalAidesV;
   const parAnnee = {};
   promo().paiements.forEach(p=>{ const y=p.trimestre.slice(0,4); parAnnee[y]=(parAnnee[y]||0)+p.montant; });
-  document.getElementById('promoCaisseTotal').textContent = fmt(soldeCaisse)+' FCFA';
+  document.getElementById('promoCaisseTotal').textContent = fmt(totalGlobal - totalAidesV)+' FCFA';
   document.getElementById('promoCaisseFlux').textContent = totalAidesV>0 ? ('Collecté '+fmt(totalGlobal)+' F  −  Aides versées '+fmt(totalAidesV)+' F') : '';
   document.getElementById('promoCaisseDetail').textContent = Object.keys(parAnnee).sort().map(y=>y+' : '+fmt(parAnnee[y])+' F').join('  ·  ');
-  let impayeGlobal = 0;
-  membres.forEach(m=>{ impayeGlobal += situationMembre(m.id).reste; });
-  document.getElementById('promoCaisseImpaye').textContent = 'Reste à recouvrer : '+fmt(impayeGlobal)+' F';
-
-  const list = document.getElementById('promoMembresList');
-  const empty = document.getElementById('promoEmpty');
-  if(membres.length===0){ list.innerHTML=''; empty.style.display='block'; return; }
-  empty.style.display='none';
-
-  const q = (document.getElementById('promoRecherche').value||'').toLowerCase().trim();
-  let sorted = [...membres].sort((a,b)=>a.nom.localeCompare(b.nom));
-  if(q) sorted = sorted.filter(m=> m.nom.toLowerCase().includes(q) || (m.tel||'').replace(/[^0-9]/g,'').includes(q.replace(/[^0-9]/g,'')||'###'));
-  const tri = document.getElementById('promoTri') ? document.getElementById('promoTri').value : 'alpha';
-  if(tri!=='alpha'){
-    const resteDe = {};
-    sorted.forEach(function(m){ resteDe[m.id] = situationMembre(m.id).reste; });
-    sorted.sort(function(a,b){
-      const d = (tri==='retard') ? (resteDe[b.id]-resteDe[a.id]) : (resteDe[a.id]-resteDe[b.id]);
-      return d!==0 ? d : a.nom.localeCompare(b.nom);
-    });
-  }
-  if(sorted.length===0){ list.innerHTML = '<div class="empty">Aucun membre trouvé pour « '+q+' ».</div>'; return; }
-  list.innerHTML = sorted.map(m=>{
+  document.getElementById('promoCaisseImpaye').textContent = 'Reste à recouvrer : '+fmt(cachePromo().statsGlobales.impaye)+' F';
+}
+function carteMembreHtml(m, trimestre){
     const p = paiementMembre(m.id, trimestre);
     const paye = !!p;
     const auj = p && p.date===todayStr();
@@ -4019,7 +4080,7 @@ function renderPromotion(){
         ? `<button class="btn btn-ochre btn-sm" onclick="openCotisation('${m.id}','${trimestre}')">✓ Marquer payé</button>
          <button class="btn btn-outline btn-sm" onclick="rappelWhatsappMembre('${m.id}','${trimestre}')">📱 Rappeler</button>`
         : `<span style="font-size:.72rem;color:var(--ink-soft);">— Ne cotise plus pour ce trimestre —</span>`));
-    return `<div class="agenda-item">
+    return `<div class="agenda-item" data-mid="${m.id}">
       <div class="top">
         <div>
           <div class="titre">${m.nom}</div>
@@ -4036,7 +4097,72 @@ function renderPromotion(){
         <button class="btn btn-outline btn-sm" onclick="openMembreForm('${m.id}')">✎ Fiche</button>
       </div>
     </div>`;
-  }).join('');
+}
+function renderPromotion(){
+  // remplir le sélecteur de trimestres (seulement s'il a changé)
+  const sel = document.getElementById('promoTrimestreSel');
+  const trimestres = listeTrimestres();
+  const cleTrims = trimestres.join(',');
+  if(sel.dataset.trims !== cleTrims){
+    const ancienneVal = sel.value;
+    sel.innerHTML = trimestres.map(t=>`<option value="${t}">${trimestreLabel(t)}${t===trimestreActuel()?' (en cours)':(t>trimestreActuel()?' (à venir)':'')}</option>`).join('');
+    sel.dataset.trims = cleTrims;
+    if(ancienneVal && trimestres.includes(ancienneVal)) sel.value = ancienneVal;
+    else sel.value = trimestreActuel();
+  }
+  const trimestre = sel.value;
+  renderPromoStats(trimestre);
+
+  const membres = promo().membres;
+  const list = document.getElementById('promoMembresList');
+  const empty = document.getElementById('promoEmpty');
+  if(membres.length===0){ list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  const q = (document.getElementById('promoRecherche').value||'').toLowerCase().trim();
+  const tri = document.getElementById('promoTri') ? document.getElementById('promoTri').value : 'alpha';
+  const cle = cachePromo().rev+'|'+trimestre+'|'+tri+'|'+q;
+  if(PROMO_LISTE_MEMO.cle === cle) return; // rien n'a changé depuis le dernier rendu : on ne touche pas au DOM
+
+  let sorted = [...membres].sort((a,b)=>a.nom.localeCompare(b.nom));
+  if(q) sorted = sorted.filter(m=> m.nom.toLowerCase().includes(q) || (m.tel||'').replace(/[^0-9]/g,'').includes(q.replace(/[^0-9]/g,'')||'###'));
+  if(tri!=='alpha'){
+    const resteDe = {};
+    sorted.forEach(function(m){ resteDe[m.id] = situationMembre(m.id).reste; });
+    sorted.sort(function(a,b){
+      const d = (tri==='retard') ? (resteDe[b.id]-resteDe[a.id]) : (resteDe[a.id]-resteDe[b.id]);
+      return d!==0 ? d : a.nom.localeCompare(b.nom);
+    });
+  }
+  const html = sorted.length===0
+    ? '<div class="empty">Aucun membre trouvé pour « '+q+' ».</div>'
+    : sorted.map(m=>carteMembreHtml(m, trimestre)).join('');
+  if(html !== PROMO_LISTE_MEMO.html) list.innerHTML = html; // même contenu : on économise le re-parsing DOM
+  PROMO_LISTE_MEMO = {cle: cle, html: html};
+}
+function majCarteMembre(membreId, trimestre){
+  PROMO_LISTE_MEMO.cle = ''; // la liste vient de changer : le mémo sera reconstruit au prochain rendu complet
+  const list = document.getElementById('promoMembresList');
+  const noeud = list ? list.querySelector('[data-mid="'+membreId+'"]') : null;
+  const m = cachePromo().membresParId[membreId];
+  if(!noeud || !m){ renderPromotion(); return; }
+  const tmp = document.createElement('div');
+  tmp.innerHTML = carteMembreHtml(m, trimestre);
+  noeud.replaceWith(tmp.firstElementChild);
+}
+function savePromoCible(membreId, trimestre){
+  // Sauvegarde + mise à jour d'UNE seule carte au lieu des 57 : paiement instantané
+  PROMO_CACHE = null;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
+  LISTE_ONGLETS.forEach(t=>TABS_SALES[t]=true);
+  if(ongletActif()==='promotion'){
+    TABS_SALES['promotion'] = false;
+    const tr = trimestre || document.getElementById('promoTrimestreSel').value;
+    renderPromoStats(tr);
+    majCarteMembre(membreId, tr);
+  } else {
+    renderOnglet(ongletActif());
+  }
 }
 
 // ---------- AVANCES SUR SALAIRE ----------

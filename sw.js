@@ -55,6 +55,10 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
+  // Le vérificateur de mise à jour interroge avec cache:'no-store' : il veut la
+  // VRAIE réponse du serveur, jamais notre copie. On s'écarte — ainsi, hors ligne,
+  // il échoue franchement (« Pas de connexion ») au lieu de croire à tort être à jour.
+  if (req.cache === 'no-store') return;
 
   var url;
   try { url = new URL(req.url); } catch (err) { return; }

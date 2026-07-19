@@ -335,7 +335,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
   <div class="header-row">
     <div>
       <h1>Mon Portefeuille</h1>
-      <div class="sub" id="headerSub">FCFA · suivi complet · v50</div>
+      <div class="sub" id="headerSub">FCFA · suivi complet · v51</div>
     </div>
     <div style="display:flex;gap:8px;">
       <button class="lock-btn" onclick="openSauvegardeModal()" title="Sauvegarde">💾</button>
@@ -1450,6 +1450,15 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
     <button class="close-x" onclick="closeOverlay('overlaySecurite')">✕</button>
     <h3>Sécurité</h3>
 
+    <!-- ── VERSION & MISES À JOUR ── -->
+    <div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div style="font-size:.82rem;">Version installée : <b id="secVersion"></b></div>
+        <button class="btn btn-outline btn-sm" onclick="verifierMajManuel()">🔄 Vérifier les mises à jour</button>
+      </div>
+      <div id="secMajResultat" style="font-size:.78rem;margin-top:6px;min-height:16px;color:var(--ink-soft);"></div>
+    </div>
+
     <!-- ── CHIFFREMENT DES DONNÉES ── -->
     <div id="secChiffreOff">
       <div style="background:#FDF3E3;border:1px solid var(--ochre);border-radius:10px;padding:11px;margin-bottom:12px;">
@@ -2471,6 +2480,8 @@ function openSecuriteModal(){
   document.getElementById('chConfirme').checked = false;
   document.getElementById('chError').textContent = '';
   document.getElementById('chOffError').textContent = '';
+  document.getElementById('secVersion').textContent = 'v' + APP_VERSION;
+  document.getElementById('secMajResultat').textContent = '';
   document.getElementById('secNoPass').style.display = hasPass ? 'none' : 'block';
   document.getElementById('secHasPass').style.display = hasPass ? 'block' : 'none';
   ['secNewPass1','secNewPass2','secOldPass','secModPass1','secModPass2','secDelPass'].forEach(id=>document.getElementById(id).value='');
@@ -5268,6 +5279,27 @@ function majMaintenant(){
     try{ const d = localStorage.getItem(STORAGE_KEY); if(d) localStorage.setItem('portefeuille_backup_avant_maj', d); }catch(e){}
     location.reload();
   }).catch(function(){ location.reload(); });
+}
+function verifierMajManuel(){
+  const res = document.getElementById('secMajResultat');
+  res.textContent = '⏳ Vérification…';
+  fetch(location.pathname, {cache:'no-store'})
+    .then(function(r){ return r.ok ? r.text() : ''; })
+    .then(function(txt){
+      const m = txt.match(/suivi complet · v(\d+)/);
+      if(!m){ res.textContent = "Impossible de lire la version en ligne — réessaie plus tard."; return; }
+      const dispo = parseInt(m[1], 10);
+      if(dispo > APP_VERSION){
+        res.textContent = '🔄 Nouvelle version v' + dispo + ' disponible !';
+        window.__majDispo = dispo;
+        MAJ_IGNOREE = 0;
+        document.getElementById('majVersionDispo').textContent = 'v' + dispo;
+        document.getElementById('majBanner').style.display = 'flex';
+      } else {
+        res.textContent = '✓ Tu es à jour (v' + APP_VERSION + ').';
+      }
+    })
+    .catch(function(){ res.textContent = 'Pas de connexion — réessaie avec Internet.'; });
 }
 function majPlusTard(){
   MAJ_IGNOREE = window.__majDispo || 0;

@@ -335,7 +335,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
   <div class="header-row">
     <div>
       <h1>Mon Portefeuille</h1>
-      <div class="sub" id="headerSub">FCFA · suivi complet · v64</div>
+      <div class="sub" id="headerSub">FCFA · suivi complet · v68</div>
     </div>
     <div style="display:flex;gap:8px;">
       <button class="lock-btn" onclick="openSauvegardeModal()" title="Sauvegarde">💾</button>
@@ -422,6 +422,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
         <div id="promoCaisseChezMoi" style="margin-top:8px;"></div>
       </div>
       <button class="btn btn-outline btn-block" style="margin-bottom:12px;" onclick="openCaisseChezMoi()">💼 Argent de la caisse pris par moi</button>
+      <button class="btn btn-outline btn-block" style="margin-bottom:12px;" onclick="openMalCotisants()">📉 Synthèse des mal cotisants</button>
 
       <div class="ledger-total" style="padding:14px 10px;">
         <div class="label">Collecté ce trimestre</div>
@@ -1107,6 +1108,18 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
   </div>
 </div>
 
+<!-- MODAL: Synthèse des mal cotisants -->
+<div class="overlay" id="overlayMalCotisants">
+  <div class="modal">
+    <button class="close-x" onclick="closeOverlay('overlayMalCotisants')">✕</button>
+    <h3>📉 Synthèse des mal cotisants</h3>
+    <div id="mscDate" style="font-size:.75rem;color:var(--ink-soft);margin-bottom:10px;"></div>
+    <div id="mscCorps"></div>
+    <button class="btn btn-ochre btn-block" style="margin-top:12px;" onclick="copierMalCotisants()">📋 Copier (WhatsApp)</button>
+    <div id="mscMsg" style="font-size:.75rem;color:var(--teal);margin-top:6px;min-height:16px;"></div>
+  </div>
+</div>
+
 <!-- MODAL: Argent de la caisse chez le trésorier -->
 <div class="overlay" id="overlayCaisseChezMoi">
   <div class="modal">
@@ -1638,6 +1651,14 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
       <div id="secMajResultat" style="font-size:.78rem;margin-top:6px;min-height:16px;color:var(--ink-soft);"></div>
       <button class="btn btn-outline btn-sm btn-block" style="margin-top:8px;" onclick="diagnosticHorsLigne()">🔌 Pourquoi ça ne marche pas sans connexion ?</button>
       <div id="secDiag" style="font-size:.76rem;margin-top:8px;line-height:1.55;"></div>
+      <hr style="border:none;border-top:1px dashed var(--border);margin:12px 0;">
+      <div style="font-size:.78rem;font-weight:700;margin-bottom:4px;">📂 Installer depuis un fichier</div>
+      <p style="font-size:.74rem;color:var(--ink-soft);line-height:1.5;margin:0 0 8px;">Tu as reçu un fichier <b>portefeuille.html</b> ? Installe-le directement, sans passer par GitHub. <b>Tes données ne bougent pas.</b></p>
+      <label class="btn btn-ochre btn-block" style="cursor:pointer;margin-bottom:6px;">📂 Choisir le fichier à installer
+        <input type="file" id="majFichierInput" accept=".html,text/html" onchange="installerDepuisFichier(this)" style="display:none;">
+      </label>
+      <div id="majFichierEtat" style="font-size:.74rem;margin-bottom:6px;"></div>
+      <div id="majFichierMsg" style="font-size:.76rem;min-height:16px;line-height:1.5;"></div>
     </div>
 
     <!-- ── CHIFFREMENT DES DONNÉES ── -->
@@ -1869,6 +1890,7 @@ function openComptForm(id){
   document.getElementById('ctDeleteBtn').style.display = id ? 'block' : 'none';
   if(id){
     const c = DATA.comptes.find(x=>x.id===id);
+    if(!c) return;
     document.getElementById('ctNom').value = c.nom;
     document.getElementById('ctSolde').value = c.soldeInitial;
   } else {
@@ -1884,6 +1906,7 @@ function saveCompte(){
   if(!nom){ alert('Indique un nom de compte.'); return; }
   if(editId){
     const c = DATA.comptes.find(x=>x.id===editId);
+    if(!c){ alert("Cet élément n'existe plus."); return; }
     c.nom = nom; c.soldeInitial = solde;
   } else {
     DATA.comptes.push({id:uid(), nom, soldeInitial:solde});
@@ -1957,6 +1980,7 @@ function openTxForm(type, editId){
   chargerSuggestionsDesc(type);
   if(editId){
     const t = DATA.transactions.find(x=>x.id===editId);
+    if(!t) return;
     document.getElementById('txMontant').value = t.montant;
     document.getElementById('txCompte').value = t.compteId;
     document.getElementById('txCategorie').value = t.categorie;
@@ -2078,6 +2102,7 @@ function openCreditForm(editId){
   fillCompteSelect(document.getElementById('crCompte'), false);
   if(editId){
     const c = DATA.credits.find(x=>x.id===editId);
+    if(!c) return;
     document.getElementById('crCompte').value = c.compteId;
     document.getElementById('crMontant').value = c.montant;
     document.getElementById('crDesc').value = c.description;
@@ -2115,7 +2140,9 @@ function openRembCredit(creditId, histId){
   document.getElementById('rcTitle').textContent = histId ? 'Modifier ce remboursement' : 'Rembourser ce crédit';
   if(histId){
     const credit = DATA.credits.find(c=>c.id===creditId);
+    if(!credit) return;
     const h = credit.historique.find(x=>x.id===histId);
+    if(!h) return;
     document.getElementById('rcMontant').value = h.montant;
     document.getElementById('rcDate').value = h.date;
   } else {
@@ -2130,9 +2157,11 @@ function saveRembCredit(){
   const montant = parseFloat(document.getElementById('rcMontant').value);
   const date = document.getElementById('rcDate').value || todayStr();
   const credit = DATA.credits.find(c=>c.id===creditId);
+  if(!credit){ alert("Cet élément n'existe plus."); return; }
   if(!montant || montant<=0){ alert('Indique un montant valide.'); return; }
   if(histId){
     const h = credit.historique.find(x=>x.id===histId);
+    if(!h){ alert("Cet élément n'existe plus."); return; }
     // effet net du changement de montant sur le solde
     const diff = montant - h.montant;
     if(diff > 0 && diff > soldeCompte(credit.compteId)){
@@ -2183,6 +2212,7 @@ function openPersonneForm(editId){
   document.getElementById('perTitle').textContent = editId ? 'Modifier la fiche' : 'Crédit avec une personne';
   if(editId){
     const p = DATA.personnes.find(x=>x.id===editId);
+    if(!p) return;
     setPersType(p.type);
     document.getElementById('perNom').value = p.nom;
     document.getElementById('perMontant').value = p.montant;
@@ -2221,11 +2251,13 @@ function personneRestant(p){
 }
 function openRembPersonne(id, histId){
   const p = DATA.personnes.find(x=>x.id===id);
+  if(!p) return;
   document.getElementById('rpPersonneId').value=id;
   document.getElementById('rpHistId').value = histId||'';
   document.getElementById('rembPerTitle').textContent = histId ? 'Modifier ce remboursement' : (p.type==='je_dois' ? 'Rembourser '+p.nom : 'Remboursement reçu de '+p.nom);
   if(histId){
     const h = p.historique.find(x=>x.id===histId);
+    if(!h) return;
     document.getElementById('rpMontant').value = h.montant;
     document.getElementById('rpDate').value = h.date;
   } else {
@@ -2240,9 +2272,11 @@ function saveRembPersonne(){
   const montant = parseFloat(document.getElementById('rpMontant').value);
   const date = document.getElementById('rpDate').value || todayStr();
   const p = DATA.personnes.find(x=>x.id===id);
+  if(!p){ alert("Cet élément n'existe plus."); return; }
   if(!montant || montant<=0){ alert('Indique un montant valide.'); return; }
   if(histId){
     const h = p.historique.find(x=>x.id===histId);
+    if(!h){ alert("Cet élément n'existe plus."); return; }
     h.montant = montant; h.date = date;
   } else {
     p.historique.push({id:uid(), montant, date});
@@ -2253,6 +2287,7 @@ function saveRembPersonne(){
 function deleteRembPersonne(id, histId){
   if(!confirm('Supprimer ce remboursement ?')) return;
   const p = DATA.personnes.find(x=>x.id===id);
+  if(!p) return;
   p.historique = p.historique.filter(h=>h.id!==histId);
   save();
 }
@@ -2701,6 +2736,9 @@ function openSecuriteModal(){
   document.getElementById('chOffError').textContent = '';
   document.getElementById('secVersion').textContent = 'v' + APP_VERSION;
   document.getElementById('secMajResultat').textContent = '';
+  document.getElementById('secDiag').innerHTML = '';
+  document.getElementById('majFichierMsg').innerHTML = '';
+  majFichierEtat();
   document.getElementById('secNoPass').style.display = hasPass ? 'none' : 'block';
   document.getElementById('secHasPass').style.display = hasPass ? 'block' : 'none';
   ['secNewPass1','secNewPass2','secOldPass','secModPass1','secModPass2','secDelPass'].forEach(id=>document.getElementById(id).value='');
@@ -2920,6 +2958,7 @@ function openFixeForm(editId){
   fillCategorieSelect(document.getElementById('fixeCategorie'), false);
   if(editId){
     const f = DATA.depensesFixes.find(x=>x.id===editId);
+    if(!f) return;
     document.getElementById('fixeNom').value = f.nom;
     document.getElementById('fixeFrequence').value = f.frequence || 'mensuel';
     document.getElementById('fixeMontant').value = f.montant;
@@ -2998,6 +3037,7 @@ function saveFixePay(){
 }
 function annulerFixePay(fixeId, occKey){
   const f = DATA.depensesFixes.find(x=>x.id===fixeId);
+  if(!f) return;
   const txId = f.paiements ? f.paiements[occKey] : null;
   if(!confirm('Annuler ce paiement ? La dépense sera retirée du compte.')) return;
   if(txId) DATA.transactions = DATA.transactions.filter(t=>t.id!==txId);
@@ -3437,6 +3477,7 @@ function openAgendaForm(editId){
   document.getElementById('agDeleteBtn').style.display = editId ? 'block' : 'none';
   if(editId){
     const it = DATA.agendaItems.find(x=>x.id===editId);
+    if(!it) return;
     setAgType(it.type);
     document.getElementById('agTitre').value = it.titre;
     document.getElementById('agDate').value = it.date||'';
@@ -3480,6 +3521,7 @@ function deleteAgenda(){
 }
 function toggleAgendaFait(id){
   const it = DATA.agendaItems.find(x=>x.id===id);
+  if(!it) return;
   it.fait = !it.fait; save();
 }
 function renderAgenda(){
@@ -3563,6 +3605,7 @@ function openEnfantForm(editId){
   document.getElementById('enDeleteBtn').style.display = editId ? 'block' : 'none';
   if(editId){
     const it = DATA.enfantsProgramme.find(x=>x.id===editId);
+    if(!it) return;
     document.getElementById('enTitre').value = it.titre;
     document.getElementById('enDate').value = it.date;
     document.getElementById('enMoment').value = it.moment;
@@ -3600,6 +3643,7 @@ function deleteEnfant(){
 }
 function toggleEnfantFait(id){
   const it = DATA.enfantsProgramme.find(x=>x.id===id);
+  if(!it) return;
   it.fait = !it.fait; save();
 }
 function supprimerEnfantDirect(id){
@@ -3803,7 +3847,9 @@ function saveMembre(){
   if(!nom){ alert('Indique un nom.'); return; }
   if(statut!=='actif' && !sortieDate){ alert('Indique la date de sortie (ex : 31/12/2025).'); return; }
   if(editId){
-    const m = promo().membres.find(x=>x.id===editId); m.nom = nom; m.tel = tel;
+    const m = promo().membres.find(x=>x.id===editId);
+    if(!m){ alert("Cet élément n'existe plus."); return; }
+    m.nom = nom; m.tel = tel;
     if(statut==='actif'){ delete m.sortie; } else { m.sortie = {motif:statut, date:sortieDate}; }
   } else {
     const nv = {id:uid(), nom, tel};
@@ -4444,6 +4490,250 @@ function deleteDepChantier(did){
   save();
   renderChantierDetail(cid);
   renderRubriques();
+}
+
+// ---------- INSTALLER UNE VERSION DEPUIS UN FICHIER ----------
+// L'utilisateur choisit lui-même le fichier portefeuille.html reçu par WhatsApp.
+// On le range dans un cache réservé ; le service worker le sert ensuite à la place
+// de celui du serveur. Même adresse internet, donc TOUTES LES DONNÉES RESTENT.
+// Porte de secours si la version installée est cassée : ouvrir l'adresse avec
+// ?maj=reset — géré par le service worker lui-même.
+var CACHE_MANUEL_NOM = 'portefeuille-manuel';
+
+function majFichierEtat(){
+  const z = document.getElementById('majFichierEtat');
+  if(!z) return;
+  z.innerHTML = '';
+  if(!('serviceWorker' in navigator) || !('caches' in window)) return;
+  navigator.serviceWorker.getRegistration().then(function(reg){
+    if(!reg || !reg.active){
+      z.innerHTML = '<span style="color:var(--rust);">⚠️ Le mécanisme hors-ligne n\'est pas encore actif : l\'installation depuis un fichier ne peut pas marcher. Utilise d\'abord le bouton 🔌 ci-dessus.</span>';
+      return;
+    }
+    return caches.open(CACHE_MANUEL_NOM).then(function(c){ return c.keys(); }).then(function(ks){
+      if(ks && ks.length){
+        z.innerHTML = '<span style="color:var(--teal);">✓ Tu utilises une version installée depuis un fichier.</span>'
+          + ' <a href="#" onclick="revenirVersionEnLigne();return false;" style="color:var(--ink-soft);">Revenir à celle du serveur</a>';
+      }
+    });
+  }).catch(function(){});
+}
+
+function installerDepuisFichier(input){
+  const f = input.files && input.files[0];
+  input.value = '';
+  const msg = document.getElementById('majFichierMsg');
+  const dire = function(txt, coul){ msg.innerHTML = '<span style="color:'+(coul||'var(--ink)')+';">'+txt+'</span>'; };
+  if(!f) return;
+  if(!('caches' in window)){ dire("Ce téléphone ne permet pas d'installer un fichier ainsi.", 'var(--rust)'); return; }
+  dire('⏳ Lecture du fichier…', 'var(--ink-soft)');
+  navigator.serviceWorker.getRegistration().then(function(reg){
+    if(!reg || !reg.active){
+      dire("Le mécanisme hors-ligne n'est pas actif : impossible d'installer un fichier. Utilise d'abord le bouton 🔌 juste au-dessus.", 'var(--rust)');
+      return;
+    }
+    const r = new FileReader();
+    r.onerror = function(){ dire("Impossible de lire ce fichier.", 'var(--rust)'); };
+    r.onload = function(){
+      const html = String(r.result || '');
+      const t = html.trim();
+      // ── Contrôles : on refuse tout fichier qui n'est pas une vraie version de l'appli ──
+      if(t.length < 100000){ dire("Ce fichier est trop petit pour être l'application (" + Math.round(t.length/1024) + " Ko). Rien n'a été installé.", 'var(--rust)'); return; }
+      if(t.indexOf('<!DOCTYPE html>') !== 0 || t.lastIndexOf('</html>') < t.length - 20){
+        dire("Ce fichier est incomplet ou abîmé. Rien n'a été installé.", 'var(--rust)'); return;
+      }
+      const m = html.match(/suivi complet · v(\d+)/);
+      if(!m){ dire("Ce fichier n'est pas une version de Mon Portefeuille. Rien n'a été installé.", 'var(--rust)'); return; }
+      if(html.indexOf('function promo()') < 0 || html.indexOf('function save()') < 0 || html.indexOf('id="lockScreen"') < 0){
+        dire("Ce fichier ne contient pas l'application complète. Rien n'a été installé.", 'var(--rust)'); return;
+      }
+      const nv = parseInt(m[1], 10);
+      let question = 'Installer la version v' + nv + ' ?';
+      if(nv < APP_VERSION) question = '⚠️ Ce fichier est une version PLUS ANCIENNE (v' + nv + ') que celle que tu utilises (v' + APP_VERSION + ').\n\nInstaller quand même ?';
+      else if(nv === APP_VERSION) question = "C'est la même version que celle que tu utilises déjà (v" + nv + ").\n\nRéinstaller quand même ?";
+      else question = 'Installer la version v' + nv + ' ?\n\nTes données ne seront pas touchées.';
+      if(!confirm(question)){ dire('Installation annulée.', 'var(--ink-soft)'); return; }
+      dire('⏳ Installation…', 'var(--ink-soft)');
+      // Photo de sécurité des données AVANT de recharger, comme pour une mise à jour normale.
+      const fin = (typeof FILE_ECRITURE !== 'undefined' && FILE_ECRITURE) ? FILE_ECRITURE : Promise.resolve();
+      Promise.race([fin, new Promise(function(res){ setTimeout(res, 1500); })])
+        .then(function(){
+          try{ const dd = localStorage.getItem(STORAGE_KEY); if(dd) localStorage.setItem('portefeuille_backup_avant_maj', dd); }catch(e){}
+          return caches.open(CACHE_MANUEL_NOM);
+        })
+        .then(function(c){
+          return c.put(location.origin + location.pathname.replace(/[^/]*$/, '') + (location.pathname.split('/').pop()==='portefeuille.html' ? 'portefeuille.html' : 'index.html'),
+            new Response(html, {headers:{'Content-Type':'text/html; charset=utf-8'}}));
+        })
+        .then(function(){
+          dire('✓ Version v' + nv + ' installée. L\'appli va se recharger…', 'var(--teal)');
+          setTimeout(function(){ location.reload(); }, 900);
+        })
+        .catch(function(e){
+          dire("L'installation a échoué : " + (e && e.message ? e.message : 'erreur inconnue') + ". Rien n'a changé.", 'var(--rust)');
+        });
+    };
+    r.readAsText(f);
+  }).catch(function(){
+    dire("Impossible de vérifier le mécanisme hors-ligne.", 'var(--rust)');
+  });
+}
+
+function revenirVersionEnLigne(){
+  if(!confirm("Revenir à la version qui est sur le serveur ?\n\nTes données ne seront pas touchées.")) return;
+  const msg = document.getElementById('majFichierMsg');
+  caches.delete(CACHE_MANUEL_NOM).then(function(){
+    msg.innerHTML = '<span style="color:var(--teal);">✓ Retour à la version du serveur. L\'appli va se recharger…</span>';
+    setTimeout(function(){ location.reload(); }, 900);
+  }).catch(function(){
+    msg.innerHTML = '<span style="color:var(--rust);">Le retour a échoué.</span>';
+  });
+}
+
+// ---------- SYNTHÈSE DES MAL COTISANTS ----------
+// Se branche sur les règles déjà en place : trimestresDus() (l'année entière est
+// due dès qu'elle commence) et trimestreDuPourMembre() (un membre sorti ne doit
+// plus rien après sa date de sortie).
+function analyseMalCotisants(){
+  const M = promo().montantTrimestre || 0;
+  const TR = trimestresDus();
+  const anneeNow = new Date().getFullYear();
+  const membres = promo().membres.map(function(m){
+    const dus = TR.filter(function(t){ return trimestreDuPourMembre(m, t); });
+    const payes = dus.filter(function(t){ return !!paiementMembre(m.id, t); });
+    const manq = dus.filter(function(t){ return !paiementMembre(m.id, t); });
+    let dernier = null;
+    payes.forEach(function(t){ if(!dernier || t > dernier) dernier = t; });
+    const anDernier = dernier ? parseInt(dernier.slice(0,4), 10) : null;
+    let grp;
+    if(manq.length === 0) grp = 'E';
+    else if(!dernier) grp = 'A';
+    else if(anDernier >= anneeNow) grp = 'D';
+    else if(anDernier === anneeNow - 1) grp = 'C';
+    else grp = 'B';
+    return {
+      id: m.id, nom: m.nom, tel: m.tel || '', sortie: !!m.sortie,
+      nbDus: dus.length, nbPayes: payes.length, nbManq: manq.length,
+      paye: payes.length * M, reste: manq.length * M,
+      taux: dus.length ? Math.round(payes.length / dus.length * 100) : 0,
+      dernier: dernier, groupe: grp,
+      joignable: normTel(m.tel).length >= 11
+    };
+  });
+  membres.sort(function(a,b){ return (b.reste - a.reste) || a.nom.localeCompare(b.nom); });
+  const attendu = membres.reduce(function(s,x){ return s + x.nbDus * M; }, 0);
+  const encaisse = membres.reduce(function(s,x){ return s + x.paye; }, 0);
+  const reste = membres.reduce(function(s,x){ return s + x.reste; }, 0);
+  // Nombre de payeurs par trimestre, pour voir le décrochage
+  const parTrim = TR.map(function(t){
+    let dus = 0, pay = 0;
+    promo().membres.forEach(function(m){
+      if(!trimestreDuPourMembre(m, t)) return;
+      dus++;
+      if(paiementMembre(m.id, t)) pay++;
+    });
+    return {trim: t, dus: dus, payes: pay, pct: dus ? Math.round(pay/dus*100) : 0};
+  });
+  return {membres: membres, attendu: attendu, encaisse: encaisse, reste: reste,
+          parTrim: parTrim, anneeNow: anneeNow, M: M};
+}
+function mscGroupes(a){
+  const an = a.anneeNow;
+  return [
+    {cle:'A', titre:"N'a jamais rien payé",      coul:'var(--rust)',  fond:'#FBEAE5'},
+    {cle:'B', titre:'Décroché avant ' + (an-1),  coul:'var(--rust)',  fond:'#FBEAE5'},
+    {cle:'C', titre:'Décroché en ' + (an-1),     coul:'var(--ochre)', fond:'#FDF3E3'},
+    {cle:'D', titre:'Encore actif en ' + an + ', mais en retard', coul:'var(--teal)', fond:'#E8F3F1'},
+    {cle:'E', titre:'À jour',                    coul:'var(--teal)',  fond:'#E8F3F1'}
+  ];
+}
+function openMalCotisants(){
+  renderMalCotisants();
+  openOverlay('overlayMalCotisants');
+}
+function renderMalCotisants(){
+  const a = analyseMalCotisants();
+  document.getElementById('mscDate').textContent =
+    'Situation au ' + new Date().toLocaleDateString('fr-FR') + ' · cotisation ' + fmt(a.M) + ' F par trimestre';
+  document.getElementById('mscMsg').textContent = '';
+  const taux = a.attendu ? Math.round(a.encaisse / a.attendu * 100) : 0;
+  let h = '';
+  // Vue d'ensemble
+  h += '<div style="border:1px solid var(--rust);background:#FBEAE5;border-radius:10px;padding:12px;text-align:center;margin-bottom:10px;">'
+     + '<div style="font-size:.7rem;letter-spacing:.05em;color:var(--ink-soft);">RESTE À RECOUVRER</div>'
+     + '<div style="font-size:1.5rem;font-weight:800;color:var(--rust);">' + fmt(a.reste) + ' F</div>'
+     + '<div style="font-size:.72rem;color:var(--ink-soft);margin-top:3px;">Attendu ' + fmt(a.attendu)
+     + ' F · encaissé ' + fmt(a.encaisse) + ' F (' + taux + ' %)</div></div>';
+  // Décrochage trimestre par trimestre
+  h += '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:11px;margin-bottom:10px;">'
+     + '<div style="font-weight:700;font-size:.8rem;margin-bottom:8px;">📉 Payeurs par trimestre</div>';
+  a.parTrim.forEach(function(x){
+    const coul = x.pct >= 60 ? 'var(--teal)' : (x.pct >= 30 ? 'var(--ochre)' : 'var(--rust)');
+    h += '<div style="margin-bottom:5px;">'
+       + '<div style="display:flex;justify-content:space-between;font-size:.74rem;margin-bottom:2px;">'
+       + '<span>' + x.trim + '</span><span style="font-weight:700;color:' + coul + ';">'
+       + x.payes + '/' + x.dus + '  (' + x.pct + ' %)</span></div>'
+       + '<div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;">'
+       + '<div style="height:100%;width:' + x.pct + '%;background:' + coul + ';"></div></div></div>';
+  });
+  h += '</div>';
+  // Les groupes
+  mscGroupes(a).forEach(function(g){
+    const sel = a.membres.filter(function(x){ return x.groupe === g.cle; });
+    if(!sel.length) return;
+    const som = sel.reduce(function(s,x){ return s + x.reste; }, 0);
+    const joi = sel.filter(function(x){ return x.joignable; }).length;
+    h += '<details style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:' + g.fond + ';">'
+       + '<summary style="cursor:pointer;font-size:.82rem;font-weight:700;">'
+       + echapHtml(g.titre) + ' <span style="font-weight:400;color:var(--ink-soft);">(' + sel.length + ')</span>'
+       + '<span style="float:right;color:' + g.coul + ';">' + fmt(som) + ' F</span></summary>'
+       + '<div style="font-size:.72rem;color:var(--ink-soft);margin:6px 0 8px;">'
+       + joi + ' sur ' + sel.length + ' ont un numéro enregistré</div>';
+    sel.forEach(function(x){
+      h += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:5px 0;border-top:1px solid var(--border);">'
+         + '<span style="font-size:.78rem;flex:1;">' + (x.joignable ? '☎ ' : '· ')
+         + echapHtml(x.nom) + (x.sortie ? ' <span style="color:var(--ink-soft);">(retraité)</span>' : '')
+         + '<br><span style="font-size:.7rem;color:var(--ink-soft);">' + x.nbPayes + '/' + x.nbDus
+         + ' trimestres · dernier : ' + (x.dernier || 'aucun') + '</span></span>'
+         + '<span style="font-size:.8rem;font-weight:700;color:' + g.coul + ';white-space:nowrap;">'
+         + fmt(x.reste) + ' F</span></div>';
+    });
+    h += '</details>';
+  });
+  document.getElementById('mscCorps').innerHTML = h;
+}
+function texteMalCotisants(){
+  const a = analyseMalCotisants();
+  const taux = a.attendu ? Math.round(a.encaisse / a.attendu * 100) : 0;
+  const L = [];
+  L.push('📉 SYNTHÈSE DES COTISATIONS — ' + promo().nom);
+  L.push('Au ' + new Date().toLocaleDateString('fr-FR'));
+  L.push('');
+  L.push('Attendu : ' + fmt(a.attendu) + ' F');
+  L.push('Encaissé : ' + fmt(a.encaisse) + ' F (' + taux + ' %)');
+  L.push('RESTE À RECOUVRER : ' + fmt(a.reste) + ' F');
+  L.push('');
+  mscGroupes(a).forEach(function(g){
+    const sel = a.membres.filter(function(x){ return x.groupe === g.cle; });
+    if(!sel.length) return;
+    const som = sel.reduce(function(s,x){ return s + x.reste; }, 0);
+    L.push(g.titre.toUpperCase() + ' — ' + sel.length + ' membre(s) · ' + fmt(som) + ' F');
+    sel.forEach(function(x){
+      L.push('  ' + x.nom + ' : ' + x.nbPayes + '/' + x.nbDus + ' trimestres · reste ' + fmt(x.reste) + ' F');
+    });
+    L.push('');
+  });
+  return L.join('\n').trim();
+}
+function copierMalCotisants(){
+  const txt = texteMalCotisants();
+  const msg = document.getElementById('mscMsg');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(function(){
+      msg.textContent = '✓ Copié — colle-le où tu veux';
+      setTimeout(function(){ msg.textContent = ''; }, 2000);
+    }).catch(function(){ msg.textContent = 'La copie a échoué.'; });
+  } else { msg.textContent = "La copie n'est pas possible sur ce téléphone."; }
 }
 
 // ---------- ARGENT DE LA CAISSE PRIS PAR LE TRÉSORIER ----------
@@ -5907,6 +6197,7 @@ function saveAvance(){
 }
 function openRembAvance(avanceId){
   const av = DATA.avances.find(a=>a.id===avanceId);
+  if(!av) return;
   document.getElementById('raAvanceId').value=avanceId;
   document.getElementById('raTitle').textContent='Rembourser : '+av.description;
   document.getElementById('raMontant').value= avanceRestant(av);
@@ -6297,7 +6588,7 @@ if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
     // Nom + portée dédiés : FRIGO partage le même dossier et a son propre sw.js.
     // Sans ça, les deux applis se disputent le même fichier et l'une perd le hors-ligne.
-    navigator.serviceWorker.register('sw-portefeuille.js', {scope:'portefeuille.html'})
+    navigator.serviceWorker.register('sw-portefeuille.js', {scope: (location.pathname.split('/').pop()==='portefeuille.html') ? 'portefeuille.html' : './'})
       .catch(function(){ /* pas de hors-ligne, rien de cassé */ });
   });
 }
@@ -6390,8 +6681,8 @@ function diagnosticHorsLigne(){
             L.push(ligne(false, "Aucune copie de l'appli n'est encore gardée dans le téléphone."));
             return fin('Presque : il manque une ouverture.', "Rouvre l'appli une fois de plus <b>avec Internet</b> : c'est à ce moment-là que la copie est enregistrée.", false);
           }
-          return caches.open(miens[0]).then(function(cc){ return cc.keys(); }).then(function(ks){
-            const page = ks.some(function(k){ return k.url.indexOf('portefeuille.html') >= 0; });
+          return Promise.all(miens.map(function(n){ return caches.open(n).then(function(cc){ return cc.keys(); }); })).then(function(listes){
+            const page = listes.some(function(ks){ return ks.some(function(k){ return /(portefeuille|index)\.html$/.test(k.url); }); });
             L.push(ligne(page, page ? "Une copie de l'appli est gardée dans le téléphone." : "La copie ne contient pas encore la page principale."));
             if(!page) return fin('Presque : il manque une ouverture.', "Rouvre l'appli une fois de plus <b>avec Internet</b>.", false);
             return fin('✓ Tout est en place.', "Ton appli doit s'ouvrir sans connexion. Si ce n'est pas le cas, dis-le-moi : ce sera autre chose.", true);

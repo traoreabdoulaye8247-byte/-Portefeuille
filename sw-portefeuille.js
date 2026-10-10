@@ -36,12 +36,17 @@ var CACHE_MANUEL = PREFIXE + 'manuel';
 var A_NOUS = ['portefeuille.html', 'sw-portefeuille.js'];
 
 function nousConcerne(url) {
-  return A_NOUS.indexOf(url.pathname.split('/').pop()) >= 0;
+  var f = url.pathname.split('/').pop();
+  return f === '' || f === 'index.html' || A_NOUS.indexOf(f) >= 0;
 }
 
 // Clé de cache = adresse SANS le ?v=NN : une seule copie, toujours la plus fraîche.
+// L'adresse du dossier (.../) et .../index.html sont la MÊME page : même clé,
+// sinon hors ligne l'une des deux ouvertures échouerait.
 function cle(url) {
-  return url.origin + url.pathname;
+  var p = url.pathname;
+  if (p.charAt(p.length - 1) === '/') p = p + 'index.html';
+  return url.origin + p;
 }
 
 self.addEventListener('install', function (e) {

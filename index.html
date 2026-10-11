@@ -335,7 +335,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
   <div class="header-row">
     <div>
       <h1>Mon Portefeuille</h1>
-      <div class="sub" id="headerSub">FCFA · suivi complet · v68</div>
+      <div class="sub" id="headerSub">FCFA · suivi complet · v71</div>
     </div>
     <div style="display:flex;gap:8px;">
       <button class="lock-btn" onclick="openSauvegardeModal()" title="Sauvegarde">💾</button>
@@ -422,7 +422,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
         <div id="promoCaisseChezMoi" style="margin-top:8px;"></div>
       </div>
       <button class="btn btn-outline btn-block" style="margin-bottom:12px;" onclick="openCaisseChezMoi()">💼 Argent de la caisse pris par moi</button>
-      <button class="btn btn-outline btn-block" style="margin-bottom:12px;" onclick="openMalCotisants()">📉 Synthèse des mal cotisants</button>
+      <button class="btn btn-outline btn-block" style="margin-bottom:12px;" onclick="openMalCotisants()">📉 Cotisations en retard</button>
 
       <div class="ledger-total" style="padding:14px 10px;">
         <div class="label">Collecté ce trimestre</div>
@@ -1108,11 +1108,11 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
   </div>
 </div>
 
-<!-- MODAL: Synthèse des mal cotisants -->
+<!-- MODAL: Cotisations en retard -->
 <div class="overlay" id="overlayMalCotisants">
   <div class="modal">
     <button class="close-x" onclick="closeOverlay('overlayMalCotisants')">✕</button>
-    <h3>📉 Synthèse des mal cotisants</h3>
+    <h3>📉 Cotisations en retard</h3>
     <div id="mscDate" style="font-size:.75rem;color:var(--ink-soft);margin-bottom:10px;"></div>
     <div id="mscCorps"></div>
     <button class="btn btn-ochre btn-block" style="margin-top:12px;" onclick="copierMalCotisants()">📋 Copier (WhatsApp)</button>
@@ -4590,7 +4590,7 @@ function revenirVersionEnLigne(){
   });
 }
 
-// ---------- SYNTHÈSE DES MAL COTISANTS ----------
+// ---------- COTISATIONS EN RETARD (synthèse) ----------
 // Se branche sur les règles déjà en place : trimestresDus() (l'année entière est
 // due dès qu'elle commence) et trimestreDuPourMembre() (un membre sorti ne doit
 // plus rien après sa date de sortie).
@@ -5242,12 +5242,12 @@ function openRapprochement(){
       + '<div style="font-weight:700;font-size:.8rem;margin-bottom:6px;">'+titre+'</div>'+contenu+'</div>';
   };
   let h = '';
-  h += bloc('💰 Liquidités (comptes)', d.comptes.map(function(x){ return ligne(x.nom, x.val); }).join('') + '<hr style="border:none;border-top:1px dashed var(--border);margin:6px 0;">' + ligne('Total liquidités', d.totalComptes, 'var(--ink)', true));
-  h += bloc('🟢 On me doit', (d.rec.length ? d.rec.map(function(x){ return ligne(x.nom, x.val, 'var(--teal)'); }).join('') : '<div style="font-size:.78rem;color:var(--ink-soft);">Rien en attente.</div>') + '<hr style="border:none;border-top:1px dashed var(--border);margin:6px 0;">' + ligne('Total à recevoir', d.totalRec, 'var(--teal)', true));
+  h += bloc('💰 Liquidités (comptes)', d.comptes.map(function(x){ return ligne(x.nom, x.val); }).join(''));
+  h += bloc('🟢 On me doit', (d.rec.length ? d.rec.map(function(x){ return ligne(x.nom, x.val, 'var(--teal)'); }).join('') : '<div style="font-size:.78rem;color:var(--ink-soft);">Rien en attente.</div>'));
   let detCorps = d.det.length ? d.det.map(function(x){ return ligne(x.nom, x.val, 'var(--rust)'); }).join('') : '<div style="font-size:.78rem;color:var(--ink-soft);">Rien à payer.</div>';
   if(d.totalCredits > 0) detCorps += ligne('Crédits en cours (restant)', d.totalCredits, 'var(--rust)');
   if(d.totalAvances > 0) detCorps += ligne('Avances sur salaire (à régulariser)', d.totalAvances, 'var(--rust)');
-  h += bloc('🔴 Je dois', detCorps + '<hr style="border:none;border-top:1px dashed var(--border);margin:6px 0;">' + ligne('Total à payer', d.totalDet + d.totalCredits + d.totalAvances, 'var(--rust)', true));
+  h += bloc('🔴 Je dois', detCorps);
   h += '<div style="background:'+(d.nette>=0?'#E8F3F1':'#FBEAE5')+';border:1px solid '+(d.nette>=0?'var(--teal)':'var(--rust)')+';border-radius:10px;padding:12px;text-align:center;">'
     + '<div style="font-size:.72rem;letter-spacing:.05em;color:var(--ink-soft);">POSITION NETTE</div>'
     + '<div style="font-size:1.5rem;font-weight:800;color:'+(d.nette>=0?'var(--teal)':'var(--rust)')+';">'+fmt(d.nette)+' F</div>'

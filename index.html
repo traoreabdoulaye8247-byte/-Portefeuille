@@ -335,7 +335,7 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
   <div class="header-row">
     <div>
       <h1>Mon Portefeuille</h1>
-      <div class="sub" id="headerSub">FCFA · suivi complet · v71</div>
+      <div class="sub" id="headerSub">FCFA · suivi complet · v77</div>
     </div>
     <div style="display:flex;gap:8px;">
       <button class="lock-btn" onclick="openSauvegardeModal()" title="Sauvegarde">💾</button>
@@ -1115,8 +1115,26 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
     <h3>📉 Cotisations en retard</h3>
     <div id="mscDate" style="font-size:.75rem;color:var(--ink-soft);margin-bottom:10px;"></div>
     <div id="mscCorps"></div>
-    <button class="btn btn-ochre btn-block" style="margin-top:12px;" onclick="copierMalCotisants()">📋 Copier (WhatsApp)</button>
+    <button class="btn btn-primary btn-block" style="margin-top:12px;" onclick="openRappelGroupe()">🤝 Message de rappel pour le groupe</button>
+    <button class="btn btn-ochre btn-block" style="margin-top:8px;" onclick="copierMalCotisants()">📋 Copier la synthèse (WhatsApp)</button>
     <div id="mscMsg" style="font-size:.75rem;color:var(--teal);margin-top:6px;min-height:16px;"></div>
+  </div>
+</div>
+
+<!-- MODAL: Message de rappel de solidarité pour le groupe -->
+<div class="overlay" id="overlayRappelGroupe">
+  <div class="modal">
+    <button class="close-x" onclick="closeOverlay('overlayRappelGroupe')">✕</button>
+    <h3>🤝 Rappel de solidarité</h3>
+    <p style="font-size:.76rem;color:var(--ink-soft);margin-bottom:8px;">Un message amical pour le groupe WhatsApp de la promotion. Tu peux le modifier avant de l'envoyer.</p>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:.8rem;margin-bottom:8px;">
+      <input type="checkbox" id="rgNoms" onchange="genererRappelGroupe()" style="margin-top:3px;">
+      <span>Citer aussi les noms des membres concernés<br><small style="color:var(--ink-soft);">Décoché par défaut : le message reste chaleureux, sans exposer personne devant le groupe. Cocher ou décocher recrée le texte.</small></span>
+    </label>
+    <textarea id="rgTexte" rows="14" style="width:100%;font-family:inherit;font-size:.82rem;line-height:1.4;margin-bottom:8px;"></textarea>
+    <button class="btn btn-primary btn-block" onclick="envoyerRappelGroupe()">📤 Partager — choisir le groupe WhatsApp</button>
+    <button class="btn btn-ochre btn-block" style="margin-top:8px;" onclick="copierRappelGroupe()">📋 Copier le message</button>
+    <div id="rgMsg" style="font-size:.75rem;color:var(--teal);margin-top:6px;min-height:16px;"></div>
   </div>
 </div>
 
@@ -1725,6 +1743,18 @@ main{max-width:640px;margin:0 auto;padding:16px 14px 90px;}
 </div>
 
 <script>
+// GARDE : si le téléphone refuse de stocker des données ici (aperçu dans une conversation,
+// message ouvert depuis une autre appli…), on le dit clairement au lieu d'afficher
+// une appli vide avec « Script error ». Rien n'est lu ni écrit dans ce cas : tes données sont intactes.
+(function(){
+  try{ window.localStorage.getItem('portefeuille_test_stockage'); return; }catch(e){}
+  document.body.innerHTML = '<div style="font-family:-apple-system,Helvetica,Arial,sans-serif;max-width:420px;margin:0 auto;padding:36px 22px;text-align:center;color:#171f36;">'
+    + '<div style="font-size:2.4rem;">🔒</div>'
+    + '<h2 style="margin:10px 0 8px;">Ouvre l\'appli depuis son adresse</h2>'
+    + '<p style="line-height:1.5;">Cet aperçu ne permet pas d\'enregistrer de données. Pour utiliser Mon Portefeuille, ouvre-la depuis <b>Safari</b>, avec l\'adresse de ton dépôt GitHub (ou l\'icône de ton écran d\'accueil).</p>'
+    + '<p style="line-height:1.5;color:#5a6478;font-size:.9rem;">Tes données ne sont pas touchées : elles sont gardées dans l\'appli ouverte depuis son adresse.</p></div>';
+  throw new Error('stockage indisponible (aperçu)');
+})();
 const STORAGE_KEY = 'portefeuille_abdoulaye_v1';
 const DEFAULT_CATS = ['Alimentation','Transport','Logement / Loyer','Santé','Éducation','Fournitures boutique','Achat marchandises','Salaire / Revenu','Remboursement crédit','Crédit reçu','Autre'];
 const PROMO_SEED = {"nom": "Promotion HFC", "montantTrimestre": 10000, "anneeDebut": 2024, "membres": [], "paiements": [], "aides": [], "evenements": []};
@@ -4696,7 +4726,9 @@ function renderMalCotisants(){
          + '<br><span style="font-size:.7rem;color:var(--ink-soft);">' + x.nbPayes + '/' + x.nbDus
          + ' trimestres · dernier : ' + (x.dernier || 'aucun') + '</span></span>'
          + '<span style="font-size:.8rem;font-weight:700;color:' + g.coul + ';white-space:nowrap;">'
-         + fmt(x.reste) + ' F</span></div>';
+         + fmt(x.reste) + ' F'
+         + (x.reste > 0 ? ' <button class="btn btn-outline btn-sm" style="padding:2px 7px;margin-left:4px;" title="Message amical à cette personne" onclick="rappelAmicalMembre(\'' + x.id + '\')">💬</button>' : '')
+         + '</span></div>';
     });
     h += '</details>';
   });
@@ -4734,6 +4766,129 @@ function copierMalCotisants(){
       setTimeout(function(){ msg.textContent = ''; }, 2000);
     }).catch(function(){ msg.textContent = 'La copie a échoué.'; });
   } else { msg.textContent = "La copie n'est pas possible sur ce téléphone."; }
+}
+
+// ---------- RAPPEL DE SOLIDARITÉ (groupe + message personnel) ----------
+// Ton voulu : amical, solidaire, sans jugement. Par défaut, AUCUN nom n'est cité devant le groupe.
+function listeTrimestres(manq, max){
+  const M = promo().montantTrimestre || 0;
+  let t = '';
+  manq.slice(0, max).forEach(function(tr){ t += '• ' + trimestreLabel(tr) + ' — ' + fmt(M) + ' F\n'; });
+  if(manq.length > max) t += '• … et ' + (manq.length - max) + ' autre' + (manq.length - max > 1 ? 's' : '') + '\n';
+  return t;
+}
+function texteRappelGroupe(avecNoms){
+  const a = analyseMalCotisants();
+  const taux = a.attendu ? Math.round(a.encaisse / a.attendu * 100) : 0;
+  const total = a.membres.length;
+  const enRetard = a.membres.filter(function(x){ return x.nbManq > 0; });
+  const aJour = total - enRetard.length;
+  const now = new Date();
+  const trCourant = now.getFullYear() + '-T' + Math.ceil((now.getMonth() + 1) / 3);
+  const pt = a.parTrim.filter(function(x){ return x.trim === trCourant; })[0];
+  const L = [];
+  L.push('❤️ *' + promo().nom + ' — Un appel du cœur*');
+  L.push('📅 ' + now.toLocaleDateString('fr-FR'));
+  L.push('');
+  L.push('Chers frères et sœurs de la promotion, ' + salutation().toLowerCase() + '. Que la paix et la bénédiction d\'Allah (SWT) soient sur chacun de vous et sur vos familles. 🙏');
+  L.push('');
+  L.push('Aujourd\'hui, je ne vous écris pas pour parler d\'argent. Je vous écris pour parler de ce que nous sommes.');
+  L.push('');
+  L.push('Notre cotisation a un seul but : aider un agent de la promotion quand la vie le frappe. Quand la maladie s\'abat sur l\'un de nous, la promotion est là. Quand la mort emporte un agent, la promotion est debout auprès de sa famille. Quand vient l\'heure de la retraite, la promotion accompagne celui qui part, pour qu\'il ne parte pas les mains vides. Cette force n\'est pas un hasard : elle existe parce que, trimestre après trimestre, chacun a donné un peu de lui pour tous. 🤝');
+  L.push('');
+  L.push('Chaque cotisation n\'est pas une simple somme. C\'est une main tendue. C\'est une promesse silencieuse : « Si demain la maladie me frappe, si demain je pars, mes frères seront là. » Et demain, ce sera peut-être l\'un de nous qui aura besoin de cette main. 🤲');
+  L.push('');
+  L.push('📊 *Où en sommes-nous aujourd\'hui ?*');
+  L.push('• Cotisation : ' + fmt(a.M) + ' F par trimestre');
+  L.push('• Déjà réuni ensemble : ' + fmt(a.encaisse) + ' F sur ' + fmt(a.attendu) + ' F attendus (' + taux + ' %)');
+  L.push('• Il manque encore : ' + fmt(a.reste) + ' F');
+  L.push('• ' + aJour + ' membre' + (aJour > 1 ? 's' : '') + ' à jour, ' + enRetard.length + ' avec des trimestres encore à régler');
+  if(pt) L.push('• Trimestre en cours (' + trCourant + ') : ' + pt.payes + ' sur ' + pt.dus + ' ont déjà payé');
+  L.push('');
+  if(avecNoms && enRetard.length){
+    L.push('👥 *Ceux vers qui la promotion tend la main :*');
+    enRetard.forEach(function(x){
+      L.push('• ' + x.nom + ' — ' + x.nbManq + ' trimestre' + (x.nbManq > 1 ? 's' : '') + ' · ' + fmt(x.reste) + ' F');
+    });
+    L.push('');
+  }
+  L.push('Je ne pointe personne du doigt. Je sais que la vie est dure pour beaucoup, que les charges pèsent, que certains ont traversé des mois difficiles en silence. Si c\'est ton cas, n\'aie pas honte : viens me parler, en toute discrétion. Nous trouverons ensemble un arrangement, petit à petit, à ton rythme. Personne ne sera jugé. 🤍');
+  L.push('');
+  L.push('Mais si tu le peux, même un seul trimestre aujourd\'hui, fais-le pour nous tous. Chaque F versé est un acte d\'amour envers cette famille que nous avons bâtie ensemble, et que nous ne voulons pas voir s\'éteindre. 💛');
+  L.push('');
+  L.push('Une promotion qui ne cotise plus n\'est plus qu\'un souvenir. Une promotion qui cotise est une famille vivante. Choisissons ensemble de rester vivants. 🤝');
+  L.push('');
+  L.push('Qu\'Allah (SWT) vous récompense, vous facilite vos affaires et nous garde unis. Barakallahu fikoum. 🙏');
+  L.push('');
+  L.push('Vos frères,');
+  L.push('Le trésorier et le trésorier adjoint.');
+  return L.join('\n');
+}
+function openRappelGroupe(){
+  document.getElementById('rgNoms').checked = false;
+  document.getElementById('rgMsg').textContent = '';
+  genererRappelGroupe();
+  openOverlay('overlayRappelGroupe');
+}
+function genererRappelGroupe(){
+  document.getElementById('rgTexte').value = texteRappelGroupe(document.getElementById('rgNoms').checked);
+}
+function copierRappelGroupe(){
+  const txt = document.getElementById('rgTexte').value;
+  const msg = document.getElementById('rgMsg');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(function(){
+      msg.textContent = '✓ Copié — colle-le dans le groupe WhatsApp';
+      setTimeout(function(){ msg.textContent = ''; }, 2500);
+    }).catch(function(){ msg.textContent = 'La copie a échoué : sélectionne le texte et copie-le à la main.'; });
+  } else { msg.textContent = "La copie n'est pas possible sur ce téléphone : sélectionne le texte et copie-le à la main."; }
+}
+// Le lien direct WhatsApp coupe les longs messages (emojis et accents comptent très cher) :
+// on passe par la feuille de partage de l'iPhone, qui n'a pas de limite — tu y choisis le groupe.
+function envoyerRappelGroupe(){
+  const txt = document.getElementById('rgTexte').value;
+  const msg = document.getElementById('rgMsg');
+  if(navigator.share){
+    navigator.share({text: txt}).catch(function(e){
+      if(e && e.name === 'AbortError') return;   // il a simplement fermé la feuille
+      msg.style.color = 'var(--rust)';
+      msg.textContent = 'Le partage a échoué : utilise « Copier le message ».';
+    });
+  } else {
+    copierRappelGroupe();
+  }
+}
+// Message personnel et amical à UNE personne : ses trimestres restants, sans pression.
+function texteRappelAmical(membreId){
+  const m = promo().membres.find(function(x){ return x.id === membreId; });
+  if(!m) return '';
+  const s = situationMembre(membreId);
+  const L = [];
+  L.push(salutation() + ' cher(e) ' + prenomMembre(m.nom) + ', j\'espère que tu te portes bien, toi et les tiens. 🙏');
+  L.push('');
+  L.push('Je t\'écris en toute amitié au nom de la promotion. Tu comptes beaucoup pour nous, et la solidarité entre nous est notre force. 🤝');
+  L.push('');
+  if(s.manquants.length){
+    L.push('Voici où tu en es pour les cotisations :');
+    L.push(listeTrimestres(s.manquants, 6).trim());
+    L.push('👉 Total : ' + fmt(s.reste) + ' F (' + s.manquants.length + ' trimestre' + (s.manquants.length > 1 ? 's' : '') + ')');
+    L.push('');
+    L.push('Si c\'est compliqué en ce moment, pas de souci : dis-le-moi simplement, on peut y aller petit à petit. Rien ne presse au point de te mettre mal à l\'aise. 🤍');
+  } else {
+    L.push('Tu es à jour dans tes cotisations : merci pour ton engagement ! ✅');
+  }
+  L.push('');
+  L.push('Qu\'Allah (SWT) te bénisse et te facilite tout. Merci d\'être avec nous. 🙏');
+  L.push('');
+  L.push('Le trésorier.');
+  return L.join('\n');
+}
+function rappelAmicalMembre(membreId){
+  const m = promo().membres.find(function(x){ return x.id === membreId; });
+  if(!m) return;
+  const tel = telPourEnvoi(m);
+  if(!tel) return;
+  ouvrirWhatsapp(texteRappelAmical(membreId), tel);
 }
 
 // ---------- ARGENT DE LA CAISSE PRIS PAR LE TRÉSORIER ----------
@@ -5567,9 +5722,17 @@ function recuMultiTexte(membreId, trimestres, date){
   trimestres.forEach(function(tr){ txt += '• '+trimestreLabel(tr)+' — '+fmt(M)+' F\n'; });
   txt += '💰 *Total reçu : '+fmt(trimestres.length*M)+' FCFA*\n'
     + '📅 Date : '+date+'\n\n';
-  txt += (s.reste>0
-    ? '⏳ Après ce paiement, il reste : '+fmt(s.reste)+' F ('+s.manquants.length+' trimestre'+(s.manquants.length>1?'s':'')+')'
-    : '✅ Tu es maintenant totalement à jour, félicitations !');
+  // On NOMME les trimestres restants : « 1 trimestre » tout court prêtait à confusion.
+  // Au-delà de 6, on liste les 6 premiers puis « … et N autres ».
+  if(s.reste>0){
+    const MAXL = 6;
+    txt += '⏳ Après ce paiement, il reste à payer :\n';
+    s.manquants.slice(0, MAXL).forEach(function(tr){ txt += '• '+trimestreLabel(tr)+' — '+fmt(M)+' F\n'; });
+    if(s.manquants.length > MAXL) txt += '• … et '+(s.manquants.length-MAXL)+' autre'+(s.manquants.length-MAXL>1?'s':'')+'\n';
+    txt += '👉 Total restant : '+fmt(s.reste)+' F ('+s.manquants.length+' trimestre'+(s.manquants.length>1?'s':'')+')';
+  } else {
+    txt += '✅ Tu es maintenant totalement à jour, félicitations !';
+  }
   txt += '\n\nMerci beaucoup pour ta ponctualité et ton engagement au sein de la promotion. 🙏\n\nLe trésorier.';
   return txt;
 }
